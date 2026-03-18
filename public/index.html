@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>知机控制台</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="panel baby-panel">
+        <div class="baby-card">
+          <div class="baby-orb">
+            <div class="baby-face">知机</div>
+          </div>
+          <div>
+            <p class="eyebrow">机器宝宝舱</p>
+            <h1>知机</h1>
+            <p class="muted">
+              一个由五种情绪共同守护的机器宝宝。它会通过每次对话，一点点变得更懂你。
+            </p>
+          </div>
+        </div>
+
+        <div class="metrics-grid">
+          <article class="metric-card">
+            <span>成长阶段</span>
+            <strong id="growthStage">幼态</strong>
+          </article>
+          <article class="metric-card">
+            <span>理解度</span>
+            <strong id="understandingScore">18%</strong>
+          </article>
+          <article class="metric-card">
+            <span>亲密度</span>
+            <strong id="intimacyScore">12%</strong>
+          </article>
+          <article class="metric-card">
+            <span>对话轮次</span>
+            <strong id="interactionCount">0</strong>
+          </article>
+        </div>
+
+        <section class="status-card">
+          <p class="eyebrow">今日状态</p>
+          <h2 id="babyMood">等待和你建立连接</h2>
+          <p id="growthNote" class="muted">
+            发送第一条消息后，知机会开始记录它对你的理解。
+          </p>
+        </section>
+
+        <section class="memory-card">
+          <div class="section-head">
+            <p class="eyebrow">记忆入口</p>
+            <span class="tag">轻量版</span>
+          </div>
+          <ul id="memoryList" class="memory-list">
+            <li class="memory-empty">还没有沉淀新的记忆。</li>
+          </ul>
+        </section>
+      </aside>
+
+      <main class="panel chat-panel">
+        <header class="chat-header">
+          <div>
+            <p class="eyebrow">主聊天区</p>
+            <h2>你正在和知机对话</h2>
+          </div>
+          <div class="pill-row">
+            <span class="pill">文字已接入</span>
+            <span class="pill pill-muted">图片入口预留</span>
+            <span class="pill pill-muted">语音入口预留</span>
+          </div>
+        </header>
+
+        <section id="chatMessages" class="chat-messages">
+          <article class="message message-baby">
+            <div class="message-role">知机</div>
+            <div class="message-bubble">
+              你好，我已经在控制台里待命了。你发来一句话，我会让五个情绪一起商量怎么回应你。
+            </div>
+          </article>
+        </section>
+
+        <form id="chatForm" class="composer">
+          <label class="composer-label" for="chatInput">把现在的心情告诉知机</label>
+          <textarea
+            id="chatInput"
+            name="chatInput"
+            rows="4"
+            placeholder="例如：今天有点难过，但又不知道该和谁说。"
+            required
+          ></textarea>
+          <div class="composer-actions">
+            <div class="placeholder-actions">
+              <label class="ghost-button upload-button">
+                上传图片
+                <input id="imageInput" type="file" accept="image/*" hidden />
+              </label>
+              <button id="recordButton" type="button" class="ghost-button">语音输入</button>
+            </div>
+            <button id="sendButton" type="submit" class="primary-button">发送给知机</button>
+          </div>
+          <div id="attachmentPanel" class="attachment-panel hidden">
+            <div id="imagePreviewList" class="image-preview-list"></div>
+            <div id="audioTranscriptBox" class="audio-transcript muted"></div>
+          </div>
+          <p id="chatStatus" class="composer-status">空状态、加载和错误都会显示在这里。</p>
+        </form>
+      </main>
+
+      <aside class="panel console-panel">
+        <header class="console-header">
+          <div>
+            <p class="eyebrow">头脑特工队控制台</p>
+            <h2>五个情绪正在协作</h2>
+          </div>
+          <div class="dominant-chip">
+            本轮主导：<strong id="dominantAgent">暂无</strong>
+          </div>
+        </header>
+
+        <section class="consensus-card">
+          <p class="eyebrow">最终共识</p>
+          <p id="consensusSummary" class="muted">
+            知机会把不同情绪的意见收束成一条完整回复。
+          </p>
+        </section>
+
+        <section class="operations-scene-card">
+          <div class="section-head">
+            <p class="eyebrow">操作室场景</p>
+            <span class="tag">情绪剧场</span>
+          </div>
+          <div class="operations-scene">
+            <div class="scene-background">
+              <div class="scene-screen"></div>
+              <div class="scene-console-ring"></div>
+              <div class="scene-platform"></div>
+              <div class="scene-light scene-light-left"></div>
+              <div class="scene-light scene-light-right"></div>
+            </div>
+            <div id="sceneRoster" class="scene-roster"></div>
+          </div>
+        </section>
+
+        <section class="operations-card">
+          <div class="section-head">
+            <p class="eyebrow">操作室任务流</p>
+            <span id="providerBadge" class="tag">实时模型</span>
+          </div>
+          <div id="taskTimeline" class="task-timeline"></div>
+        </section>
+
+        <section id="agentGrid" class="agent-grid"></section>
+      </aside>
+    </div>
+
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
