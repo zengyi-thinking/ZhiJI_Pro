@@ -133,14 +133,58 @@
             <span class="tag">情绪剧场</span>
           </div>
           <div class="operations-scene">
-            <div class="scene-background">
-              <div class="scene-screen"></div>
-              <div class="scene-console-ring"></div>
-              <div class="scene-platform"></div>
-              <div class="scene-light scene-light-left"></div>
-              <div class="scene-light scene-light-right"></div>
+            <div class="scene-toolbar" aria-label="场景视图控制">
+              <button id="zoomOutButton" type="button" class="scene-tool-button" aria-label="缩小场景">
+                -
+              </button>
+              <button id="zoomResetButton" type="button" class="scene-tool-button" aria-label="重置视图">
+                复位
+              </button>
+              <button id="zoomInButton" type="button" class="scene-tool-button" aria-label="放大场景">
+                +
+              </button>
             </div>
-            <div id="sceneRoster" class="scene-roster"></div>
+            <div id="sceneViewport" class="scene-viewport">
+              <div id="sceneWorld" class="scene-world">
+                <div class="scene-bg pixel-backdrop"></div>
+                <div class="scene-bg pixel-far-buildings"></div>
+                <div class="scene-bg pixel-mid-buildings"></div>
+                <div class="scene-bg pixel-platform-shadow"></div>
+                <div class="scene-bg pixel-floor-tile"></div>
+                <div class="scene-bg pixel-floor-edge"></div>
+                <div class="scene-bg pixel-cable-lane lane-main"></div>
+                <div class="scene-bg pixel-cable-lane lane-side"></div>
+                <div class="scene-bg pixel-rail rail-left"></div>
+                <div class="scene-bg pixel-rail rail-right"></div>
+                <div class="scene-bg pixel-console-glow"></div>
+                <div class="scene-sprite-layer">
+                  <div class="sprite workstation-main">
+                    <span class="sprite-core-aura"></span>
+                    <span class="sprite-core-ring"></span>
+                    <span class="sprite-screen screen-left"></span>
+                    <span class="sprite-screen screen-center"></span>
+                    <span class="sprite-screen screen-right"></span>
+                    <span class="sprite-desk-slab"></span>
+                    <span class="sprite-keyboard"></span>
+                    <span class="sprite-chair"></span>
+                    <span class="sprite-console-pulse pulse-left"></span>
+                    <span class="sprite-console-pulse pulse-right"></span>
+                  </div>
+                  <div class="sprite workstation-side side-left"></div>
+                  <div class="sprite workstation-side side-right"></div>
+                  <div class="sprite neon-crate crate-left"></div>
+                  <div class="sprite neon-crate crate-right"></div>
+                </div>
+                <div id="sceneLinks" class="town-links"></div>
+                <div id="sceneBuildings" class="town-buildings"></div>
+              </div>
+              <div class="scene-hud">
+                <div class="scene-hud-card">
+                  <span class="scene-hud-label">当前阶段</span>
+                  <strong id="scenePhaseLabel">像素场景搭建中</strong>
+                </div>
+              </div>
+            </div>
           </div>
         </section>
 

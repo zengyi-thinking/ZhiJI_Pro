@@ -14,6 +14,51 @@ const AGENT_COLORS = {
   disgust: "var(--disgust)"
 };
 
+const PIXEL_STAGE_LAYOUT = {
+  joy: { x: 244, y: 540, station: "欢欣台", desk: "调光屏", prop: "灯条", trait: "暖色领结" },
+  sadness: { x: 330, y: 608, station: "共情台", desk: "安抚终端", prop: "热饮", trait: "蓝色围巾" },
+  anger: { x: 792, y: 608, station: "边界台", desk: "警戒屏", prop: "红灯", trait: "厚眉短夹克" },
+  fear: { x: 878, y: 542, station: "预警台", desk: "扫描仪", prop: "雷达", trait: "竖天线耳机" },
+  disgust: { x: 706, y: 540, station: "过滤台", desk: "清洁屏", prop: "滤芯", trait: "斜刘海口罩" }
+};
+
+const WORKBENCH_CORE = { x: 544, y: 558 };
+const INTERACTION_SPOTS = {
+  active: {
+    joy: { x: 408, y: 484 },
+    sadness: { x: 448, y: 534 },
+    anger: { x: 642, y: 534 },
+    fear: { x: 680, y: 484 },
+    disgust: { x: 612, y: 474 }
+  },
+  interrupt: {
+    joy: { x: 376, y: 454 },
+    sadness: { x: 430, y: 516 },
+    anger: { x: 670, y: 516 },
+    fear: { x: 710, y: 452 },
+    disgust: { x: 626, y: 444 }
+  },
+  dominant: {
+    joy: { x: 470, y: 486 },
+    sadness: { x: 494, y: 518 },
+    anger: { x: 594, y: 518 },
+    fear: { x: 620, y: 486 },
+    disgust: { x: 570, y: 474 }
+  }
+};
+
+const PHASE_TITLES = {
+  "input-arrival": "输入到达",
+  "risk-scan": "风险扫描",
+  filter: "社交过滤",
+  boundary: "边界判断",
+  empathy: "共情接住",
+  hope: "希望整合",
+  interrupt: "插话与争论",
+  dominance: "抢控制台",
+  compose: "主脑汇总"
+};
+
 const state = {
   userId: "demo-user",
   sessionId: `demo-${Math.random().toString(36).slice(2, 10)}`,
@@ -21,12 +66,28 @@ const state = {
   audioTranscript: "",
   mediaRecorder: null,
   recordedChunks: [],
+  sequenceRunId: 0,
+  latestPayload: null,
+  sceneCamera: {
+    x: -120,
+    y: -80,
+    scale: 0.92
+  },
+  sceneDrag: {
+    active: false,
+    pointerId: null,
+    startX: 0,
+    startY: 0,
+    originX: 0,
+    originY: 0
+  },
+  sceneAutoFocusSuspendedUntil: 0,
   agentGrowth: {
-    joy: { level: 1, xp: 0 },
-    sadness: { level: 1, xp: 0 },
-    anger: { level: 1, xp: 0 },
-    fear: { level: 1, xp: 0 },
-    disgust: { level: 1, xp: 0 }
+    joy: { level: 1, xp: 0, temperamentShift: "更会点亮气氛" },
+    sadness: { level: 1, xp: 0, temperamentShift: "更会安静接住情绪" },
+    anger: { level: 1, xp: 0, temperamentShift: "更会保护边界" },
+    fear: { level: 1, xp: 0, temperamentShift: "更会预判风险" },
+    disgust: { level: 1, xp: 0, temperamentShift: "更会过滤别扭表达" }
   }
 };
 
@@ -52,10 +113,20 @@ const audioTranscriptBox = document.getElementById("audioTranscriptBox");
 const recordButton = document.getElementById("recordButton");
 const taskTimeline = document.getElementById("taskTimeline");
 const providerBadge = document.getElementById("providerBadge");
-const sceneRoster = document.getElementById("sceneRoster");
+const scenePhaseLabel = document.getElementById("scenePhaseLabel");
+const sceneViewport = document.getElementById("sceneViewport");
+const sceneWorld = document.getElementById("sceneWorld");
+const sceneSpriteLayer = document.querySelector(".scene-sprite-layer");
+const sceneLinks = document.getElementById("sceneLinks");
+const sceneBuildings = document.getElementById("sceneBuildings");
+const zoomOutButton = document.getElementById("zoomOutButton");
+const zoomResetButton = document.getElementById("zoomResetButton");
+const zoomInButton = document.getElementById("zoomInButton");
 
 renderAgentCards([]);
-renderSceneRoster([], null);
+renderCyberTown(createIdleAgents(), null, null);
+setupSceneViewport();
+resetSceneView(true);
 void loadPersistedMemories();
 
 imageInput.addEventListener("change", async (event) => {
@@ -133,9 +204,11 @@ chatForm.addEventListener("submit", async (event) => {
 
   appendMessage("你", text || state.audioTranscript || "发送了一张图片", "user");
   chatInput.value = "";
-  chatStatus.textContent = "知机正在调动五个情绪开会……";
+  chatStatus.textContent = "知机正在调动五个情绪排队上前讨论……";
   sendButton.disabled = true;
   recordButton.disabled = true;
+  state.sequenceRunId += 1;
+  const runId = state.sequenceRunId;
 
   try {
     const response = await fetch("/api/chat", {
@@ -155,8 +228,14 @@ chatForm.addEventListener("submit", async (event) => {
     }
 
     const payload = await response.json();
+    state.latestPayload = payload;
+    await playConsoleSequence(payload, runId);
+
+    if (runId !== state.sequenceRunId) {
+      return;
+    }
+
     appendMessage("知机", payload.message.reply, "baby");
-    renderConsole(payload);
     renderGrowth(payload);
     renderMemory(payload.memory);
     resetAttachments();
@@ -164,10 +243,64 @@ chatForm.addEventListener("submit", async (event) => {
   } catch (error) {
     chatStatus.textContent = error instanceof Error ? error.message : "请求失败";
   } finally {
-    sendButton.disabled = false;
-    recordButton.disabled = false;
+    if (runId === state.sequenceRunId) {
+      sendButton.disabled = false;
+      recordButton.disabled = false;
+    }
   }
 });
+
+async function playConsoleSequence(payload, runId) {
+  updateAgentGrowthFromPayload(payload.growth);
+  providerBadge.textContent = payload.meta.providerStatus === "live" ? "实时模型" : "本地降级";
+  providerBadge.className = `tag ${payload.meta.providerStatus === "live" ? "" : "pill-muted"}`;
+  dominantAgentNode.textContent = "讨论中";
+  consensusSummaryNode.textContent = "情绪正在排队上前讨论，主脑尚未汇总。";
+  babyMoodNode.textContent = "操作室正在分配发言顺序";
+  renderTaskTimeline(payload.console.tasks, null);
+  renderAgentCards(payload.agents, null, null);
+  renderCyberTown(payload.agents, null, null);
+  resetSceneView();
+
+  for (const step of payload.console.sequence) {
+    if (runId !== state.sequenceRunId) {
+      return;
+    }
+
+    const dominantAgent =
+      step.mode === "take-console" || step.mode === "compose"
+        ? payload.console.dominantAgent
+        : null;
+
+
+    renderTaskTimeline(payload.console.tasks, step.id);
+    renderAgentCards(payload.agents, dominantAgent, step.actor);
+    renderCyberTown(payload.agents, payload.console.dominantAgent, step);
+    autoFocusScene(step, payload.console.dominantAgent);
+
+    if (step.mode === "take-console") {
+      dominantAgentNode.textContent = AGENT_LABELS[payload.console.dominantAgent];
+      babyMoodNode.textContent = `本轮更偏${AGENT_LABELS[payload.console.dominantAgent]}系守护`;
+    }
+
+    if (step.mode === "compose") {
+      consensusSummaryNode.textContent = payload.console.consensusSummary;
+      growthNoteNode.textContent = payload.message.growthNote;
+      chatStatus.textContent = payload.meta.warnings?.[0] ?? "主脑正在把讨论结果整理成回答。";
+    }
+
+    await delay(step.durationMs);
+  }
+
+  if (runId !== state.sequenceRunId) {
+    return;
+  }
+
+  renderAgentCards(payload.agents, payload.console.dominantAgent, payload.console.dominantAgent);
+  renderCyberTown(payload.agents, payload.console.dominantAgent, null);
+  resetSceneView();
+  renderTaskTimeline(payload.console.tasks, null);
+}
 
 function appendMessage(role, content, type) {
   const message = document.createElement("article");
@@ -178,21 +311,6 @@ function appendMessage(role, content, type) {
   `;
   chatMessages.appendChild(message);
   chatMessages.scrollTop = chatMessages.scrollHeight;
-}
-
-function renderConsole(payload) {
-  dominantAgentNode.textContent = AGENT_LABELS[payload.console.dominantAgent] ?? payload.console.dominantAgent;
-  consensusSummaryNode.textContent = payload.console.consensusSummary;
-  babyMoodNode.textContent = `本轮更偏${AGENT_LABELS[payload.console.dominantAgent] ?? payload.console.dominantAgent}系守护`;
-  updateAgentGrowth(payload.agents, payload.growth);
-  renderAgentCards(payload.agents, payload.console.dominantAgent);
-  renderSceneRoster(payload.agents, payload.console.dominantAgent);
-  renderTaskTimeline(payload.console.tasks);
-  providerBadge.textContent = payload.meta.providerStatus === "live" ? "实时模型" : "本地降级";
-  providerBadge.className = `tag ${payload.meta.providerStatus === "live" ? "" : "pill-muted"}`;
-  if (payload.meta.warnings?.length) {
-    chatStatus.textContent = payload.meta.warnings[0];
-  }
 }
 
 function renderGrowth(payload) {
@@ -211,10 +329,7 @@ function renderMemory(memory) {
 
   const entries = [...memory.newMemories, ...memory.relevantMemories.slice(0, 2)];
   memoryListNode.innerHTML = entries
-    .map(
-      (item) =>
-        `<li><strong>${escapeHtml(item.category)}</strong> · ${escapeHtml(item.text)}</li>`
-    )
+    .map((item) => `<li><strong>${escapeHtml(item.category)}</strong> · ${escapeHtml(item.text)}</li>`)
     .join("");
 }
 
@@ -245,16 +360,20 @@ function renderAttachments() {
   });
 }
 
-function renderTaskTimeline(tasks) {
+function renderTaskTimeline(tasks, activeTaskId) {
   if (!tasks?.length) {
     taskTimeline.innerHTML = "";
     return;
   }
 
   taskTimeline.innerHTML = tasks
+    .slice()
+    .sort((left, right) => left.priority - right.priority)
     .map(
-      (task, index) => `
-        <article class="task-item ${task.status === "fallback" ? "is-fallback" : ""}" data-task-index="${index}">
+      (task) => `
+        <article class="task-item ${task.status === "fallback" ? "is-fallback" : ""} ${
+          task.id === activeTaskId ? "is-visible" : ""
+        }">
           <div class="task-icon">${renderOwnerGlyph(task.owner)}</div>
           <div>
             <div class="task-title-row">
@@ -268,53 +387,406 @@ function renderTaskTimeline(tasks) {
     )
     .join("");
 
-  [...taskTimeline.querySelectorAll(".task-item")].forEach((node, index) => {
-    setTimeout(() => node.classList.add("is-visible"), 130 * index);
-  });
+  if (!activeTaskId) {
+    [...taskTimeline.querySelectorAll(".task-item")].forEach((node, index) => {
+      setTimeout(() => node.classList.add("is-visible"), 90 * index);
+    });
+  }
 }
 
-function renderSceneRoster(agents, dominantAgent) {
-  const speakingAgents = new Set((agents ?? []).map((agent) => agent.agent));
-  const orderedAgents = agents?.length
-    ? agents
-    : Object.keys(AGENT_LABELS).map((agent) => ({
-        agent,
-        visibility_snippet: "还没有接到任务，正在等待主控台分配。",
-        weight: 0,
-        emotion_view: "",
-        care_goal: ""
-      }));
+function renderCyberTown(agents, dominantAgent, currentStep) {
+  scenePhaseLabel.textContent = currentStep ? `${PHASE_TITLES[currentStep.phase] ?? "操作室联动中"} · 像素场景搭建中` : "像素场景搭建中";
+  syncMainWorkbenchState(currentStep, dominantAgent);
+  const stageAgents = agents?.length ? agents : createIdleAgents();
+  sceneBuildings.innerHTML = renderPixelStage(stageAgents, dominantAgent, currentStep);
+  sceneLinks.innerHTML = renderPixelLinks(stageAgents, dominantAgent, currentStep);
+}
 
-  sceneRoster.innerHTML = orderedAgents
-    .map((agent, index) => {
-      const growth = state.agentGrowth[agent.agent] ?? { level: 1, xp: 0 };
+function syncMainWorkbenchState(currentStep, dominantAgent) {
+  if (!sceneSpriteLayer) {
+    return;
+  }
+
+  sceneSpriteLayer.classList.remove("is-idle", "is-active", "is-compose", "is-dominant", "theme-joy", "theme-sadness", "theme-anger", "theme-fear", "theme-disgust");
+
+  if (!currentStep) {
+    sceneSpriteLayer.classList.add(dominantAgent ? "is-dominant" : "is-idle");
+    if (dominantAgent) {
+      sceneSpriteLayer.classList.add(`theme-${dominantAgent}`);
+    }
+    return;
+  }
+
+  if (currentStep.mode === "compose") {
+    sceneSpriteLayer.classList.add("is-compose");
+    if (dominantAgent) {
+      sceneSpriteLayer.classList.add(`theme-${dominantAgent}`);
+    }
+    return;
+  }
+
+  if (currentStep.mode === "take-console") {
+    sceneSpriteLayer.classList.add("is-dominant");
+    if (dominantAgent) {
+      sceneSpriteLayer.classList.add(`theme-${dominantAgent}`);
+    }
+    return;
+  }
+
+  sceneSpriteLayer.classList.add("is-active");
+  if (currentStep.actor && currentStep.actor in AGENT_LABELS) {
+    sceneSpriteLayer.classList.add(`theme-${currentStep.actor}`);
+  }
+}
+
+function renderPixelStage(agents, dominantAgent, currentStep) {
+  return agents
+    .map((agent) => {
+      const layout = PIXEL_STAGE_LAYOUT[agent.agent];
+      const nodeState = resolvePixelAgentState(agent.agent, dominantAgent, currentStep);
+      const position = resolvePixelAgentPosition(agent.agent, dominantAgent, currentStep);
+      const isAway = position.x !== layout.x || position.y !== layout.y;
+      const facing = position.x < WORKBENCH_CORE.x ? "right" : "left";
       const weight = Math.round((agent.weight ?? 0) * 100);
-      const dominantClass = agent.agent === dominantAgent ? "is-dominant" : "";
-      const speakingClass = speakingAgents.has(agent.agent) ? "is-speaking" : "";
       return `
-        <div class="scene-agent ${dominantClass} ${speakingClass}" style="--agent-color:${AGENT_COLORS[agent.agent]}; --delay:${index * 0.18}s">
-          <div class="scene-bubble">${escapeHtml(agent.visibility_snippet)}</div>
-          <div class="scene-character">
-            <div class="character-head">
-              <div class="character-face">
-                <div class="character-mouth"></div>
-              </div>
-            </div>
-            <div class="character-body"></div>
-            <div class="character-arm left"></div>
-            <div class="character-arm right"></div>
-            <div class="character-leg left"></div>
-            <div class="character-leg right"></div>
+        <div class="pixel-agent-stage stage-${agent.agent} is-${nodeState} ${isAway ? "is-away" : "is-home"} facing-${facing}" data-agent="${agent.agent}" data-state="${nodeState}" style="--x:${position.x}px; --y:${position.y}px; --agent-color:${AGENT_COLORS[agent.agent]}; --home-x:${layout.x}px; --home-y:${layout.y}px;">
+          <div class="pixel-station stage-${agent.agent}">
+            <div class="pixel-station-top"></div>
+            <div class="pixel-station-monitor"></div>
+            <div class="pixel-station-desk"></div>
+            <div class="pixel-station-prop"></div>
+            <div class="pixel-station-accent"></div>
           </div>
-          <div class="scene-nameplate">
-            <strong>${AGENT_LABELS[agent.agent]}</strong>
-            <span>${weight}% 影响力</span>
-            <div class="scene-level">Lv.${growth.level} · 成长 ${growth.xp}%</div>
+          <div class="pixel-agent-signal signal-${nodeState}"></div>
+          <div class="pixel-agent-body mood-${agent.mood ?? "calm"} agent-${agent.agent}">
+            <span class="pixel-agent-shadow"></span>
+            <span class="pixel-agent-head"></span>
+            <span class="pixel-agent-hair"></span>
+            <span class="pixel-agent-accessory"></span>
+            <span class="pixel-agent-eye eye-left"></span>
+            <span class="pixel-agent-eye eye-right"></span>
+            <span class="pixel-agent-torso"></span>
+            <span class="pixel-agent-arm arm-left"></span>
+            <span class="pixel-agent-arm arm-right"></span>
+            <span class="pixel-agent-leg leg-left"></span>
+            <span class="pixel-agent-leg leg-right"></span>
+          </div>
+          <div class="pixel-agent-label">
+            <strong>${AGENT_LABELS[agent.agent]} · ${layout.station}</strong>
+            <span>${escapeHtml(agent.care_goal || layout.desk)} · ${layout.prop}</span>
+            <span>${layout.trait}</span>
+            <span>影响力 ${weight}%</span>
           </div>
         </div>
       `;
     })
     .join("");
+}
+
+function resolvePixelAgentPosition(agent, dominantAgent, currentStep) {
+  const home = PIXEL_STAGE_LAYOUT[agent];
+  if (!currentStep) {
+    return home;
+  }
+
+  if (currentStep.mode === "compose") {
+    if (agent === dominantAgent) {
+      return INTERACTION_SPOTS.dominant[agent] ?? home;
+    }
+    return home;
+  }
+
+  if (currentStep.mode === "take-console" && agent === dominantAgent) {
+    return INTERACTION_SPOTS.dominant[agent] ?? home;
+  }
+
+  if (currentStep.mode === "interrupt" && currentStep.actor === agent) {
+    return INTERACTION_SPOTS.interrupt[agent] ?? home;
+  }
+
+  if ((currentStep.mode === "speak" || currentStep.mode === "announce") && currentStep.actor === agent) {
+    return INTERACTION_SPOTS.active[agent] ?? home;
+  }
+
+  return home;
+}
+
+function resolvePixelAgentState(agent, dominantAgent, currentStep) {
+  if (currentStep?.mode === "compose") {
+    return agent === dominantAgent ? "dominant" : "idle";
+  }
+  if (currentStep?.mode === "take-console" && agent === dominantAgent) {
+    return "dominant";
+  }
+  if (currentStep?.actor === agent) {
+    if (currentStep.mode === "interrupt") {
+      return "interrupting";
+    }
+    return "active";
+  }
+  if (!currentStep && agent === dominantAgent) {
+    return "dominant";
+  }
+  return "idle";
+}
+
+function renderPixelLinks(agents, dominantAgent, currentStep) {
+  return agents
+    .map((agent) => {
+      const layout = PIXEL_STAGE_LAYOUT[agent.agent];
+      const dx = layout.x - WORKBENCH_CORE.x;
+      const dy = layout.y - WORKBENCH_CORE.y;
+      const length = Math.hypot(dx, dy);
+      const angle = Math.atan2(dy, dx);
+      const state = resolvePixelLinkState(agent.agent, dominantAgent, currentStep);
+      return `
+        <div class="pixel-link link-${agent.agent} is-${state}" style="--link-x:${WORKBENCH_CORE.x}px; --link-y:${WORKBENCH_CORE.y}px; --link-length:${length}px; --link-angle:${angle}rad; --agent-color:${AGENT_COLORS[agent.agent]};">
+          <span class="pixel-link-beam"></span>
+          <span class="pixel-link-pulse"></span>
+        </div>
+      `;
+    })
+    .join("");
+}
+
+function resolvePixelLinkState(agent, dominantAgent, currentStep) {
+  if (currentStep?.mode === "compose") {
+    return agent === dominantAgent ? "compose" : "idle";
+  }
+  if (currentStep?.mode === "take-console") {
+    return agent === dominantAgent ? "dominant" : "idle";
+  }
+  if (currentStep?.mode === "interrupt" && currentStep.actor === agent) {
+    return "interrupting";
+  }
+  if (currentStep?.actor === agent) {
+    return "active";
+  }
+  if (!currentStep && agent === dominantAgent) {
+    return "dominant";
+  }
+  return "idle";
+}
+
+function setupSceneViewport() {
+  if (!sceneViewport || !sceneWorld) {
+    return;
+  }
+
+  const suspendAutoFocus = () => {
+    state.sceneAutoFocusSuspendedUntil = Date.now() + 2600;
+  };
+
+  sceneViewport.addEventListener("pointerdown", (event) => {
+    state.sceneDrag.active = true;
+    state.sceneDrag.pointerId = event.pointerId;
+    state.sceneDrag.startX = event.clientX;
+    state.sceneDrag.startY = event.clientY;
+    state.sceneDrag.originX = state.sceneCamera.x;
+    state.sceneDrag.originY = state.sceneCamera.y;
+    sceneViewport.classList.add("is-dragging");
+    sceneViewport.setPointerCapture(event.pointerId);
+    suspendAutoFocus();
+  });
+
+  sceneViewport.addEventListener("pointermove", (event) => {
+    if (!state.sceneDrag.active || event.pointerId !== state.sceneDrag.pointerId) {
+      return;
+    }
+
+    const nextX = state.sceneDrag.originX + event.clientX - state.sceneDrag.startX;
+    const nextY = state.sceneDrag.originY + event.clientY - state.sceneDrag.startY;
+    setSceneCamera({ x: nextX, y: nextY }, { clamp: true });
+  });
+
+  const releaseDrag = (event) => {
+    if (!state.sceneDrag.active || event.pointerId !== state.sceneDrag.pointerId) {
+      return;
+    }
+
+    state.sceneDrag.active = false;
+    state.sceneDrag.pointerId = null;
+    sceneViewport.classList.remove("is-dragging");
+    sceneViewport.releasePointerCapture(event.pointerId);
+  };
+
+  sceneViewport.addEventListener("pointerup", releaseDrag);
+  sceneViewport.addEventListener("pointercancel", releaseDrag);
+  sceneViewport.addEventListener("wheel", (event) => {
+    event.preventDefault();
+    suspendAutoFocus();
+    const nextScale = state.sceneCamera.scale * (event.deltaY > 0 ? 0.92 : 1.08);
+    zoomScene(nextScale, event.offsetX, event.offsetY);
+  }, { passive: false });
+
+  sceneViewport.addEventListener("dblclick", () => {
+    suspendAutoFocus();
+    resetSceneView();
+  });
+
+  zoomOutButton.addEventListener("click", () => {
+    suspendAutoFocus();
+    zoomScene(state.sceneCamera.scale - 0.08);
+  });
+
+  zoomInButton.addEventListener("click", () => {
+    suspendAutoFocus();
+    zoomScene(state.sceneCamera.scale + 0.08);
+  });
+
+  zoomResetButton.addEventListener("click", () => {
+    suspendAutoFocus();
+    resetSceneView();
+  });
+
+  window.addEventListener("resize", () => {
+    setSceneCamera({}, { clamp: true });
+  });
+
+  applySceneCamera();
+}
+
+function autoFocusScene(step, dominantAgent) {
+  void step;
+  void dominantAgent;
+  if (Date.now() < state.sceneAutoFocusSuspendedUntil) {
+    return;
+  }
+  resetSceneView();
+}
+
+function zoomScene(nextScale, anchorX, anchorY) {
+  const viewportRect = sceneViewport.getBoundingClientRect();
+  const worldX = (typeof anchorX === "number" ? anchorX : viewportRect.width / 2) - state.sceneCamera.x;
+  const worldY = (typeof anchorY === "number" ? anchorY : viewportRect.height / 2) - state.sceneCamera.y;
+  const normalizedScale = clamp(nextScale, 0.56, 1.3);
+  const scaleRatio = normalizedScale / state.sceneCamera.scale;
+  const nextX = (typeof anchorX === "number" ? anchorX : viewportRect.width / 2) - worldX * scaleRatio;
+  const nextY = (typeof anchorY === "number" ? anchorY : viewportRect.height / 2) - worldY * scaleRatio;
+
+  setSceneCamera({ x: nextX, y: nextY, scale: normalizedScale }, { clamp: true });
+}
+
+function resetSceneView(immediate = false) {
+  const viewportWidth = sceneViewport.clientWidth || 1;
+  const viewportHeight = sceneViewport.clientHeight || 1;
+  const scale = 0.92;
+  const nextX = (viewportWidth - sceneWorld.offsetWidth * scale) / 2;
+  const nextY = (viewportHeight - sceneWorld.offsetHeight * scale) / 2;
+  setSceneCamera({ x: nextX, y: nextY, scale }, { clamp: true, immediate });
+}
+
+function setSceneCamera(nextState, options = {}) {
+  state.sceneCamera = {
+    ...state.sceneCamera,
+    ...nextState
+  };
+
+  if (options.clamp) {
+    state.sceneCamera = clampSceneCamera(state.sceneCamera);
+  }
+
+  applySceneCamera(options.immediate);
+}
+
+function clampSceneCamera(camera) {
+  const viewportWidth = sceneViewport.clientWidth || 1;
+  const viewportHeight = sceneViewport.clientHeight || 1;
+  const worldWidth = sceneWorld.offsetWidth * camera.scale;
+  const worldHeight = sceneWorld.offsetHeight * camera.scale;
+
+  const minX = Math.min(0, viewportWidth - worldWidth);
+  const minY = Math.min(0, viewportHeight - worldHeight);
+  const maxX = Math.max(0, viewportWidth - worldWidth);
+  const maxY = Math.max(0, viewportHeight - worldHeight);
+
+  return {
+    ...camera,
+    x: clamp(camera.x, minX, maxX),
+    y: clamp(camera.y, minY, maxY)
+  };
+}
+
+function applySceneCamera(immediate = false) {
+  sceneWorld.style.transition = immediate || state.sceneDrag.active ? "none" : "transform 340ms ease";
+  sceneWorld.style.transform = `translate(${state.sceneCamera.x}px, ${state.sceneCamera.y}px) scale(${state.sceneCamera.scale})`;
+}
+
+function renderAgentCards(agents, dominantAgent, activeAgent) {
+  if (!agents.length) {
+    agentGrid.innerHTML = Object.entries(AGENT_LABELS)
+      .map(
+        ([agent, label]) => `
+          <article class="agent-card" style="--agent-color:${AGENT_COLORS[agent]}">
+            <div class="agent-head">
+              <div class="agent-title">
+                <span class="agent-dot"></span>
+                <strong>${label}</strong>
+              </div>
+              <span class="tag">待命</span>
+            </div>
+            <p class="muted">还没有收到本轮讨论内容。</p>
+            <div class="agent-weight">
+              <div class="weight-track"><div class="weight-fill" style="width:0%"></div></div>
+              <div class="weight-label">影响力 0%</div>
+            </div>
+          </article>
+        `
+      )
+      .join("");
+    return;
+  }
+
+  agentGrid.innerHTML = agents
+    .map((agent) => {
+      const weight = Math.round(agent.weight * 100);
+      const dominantClass = agent.agent === dominantAgent ? "is-dominant" : "";
+      const activeText =
+        agent.agent === activeAgent
+          ? "发言中"
+          : agent.agent === dominantAgent
+            ? "主导中"
+            : `Lv.${state.agentGrowth[agent.agent]?.level ?? 1}`;
+      const growth = state.agentGrowth[agent.agent] ?? { level: 1, xp: 0 };
+      return `
+        <article class="agent-card ${dominantClass}" style="--agent-color:${AGENT_COLORS[agent.agent]}">
+          <div class="agent-head">
+            <div class="agent-title">
+              <span class="agent-dot"></span>
+              <strong>${AGENT_LABELS[agent.agent]}</strong>
+            </div>
+            <span class="tag">${activeText}</span>
+          </div>
+          <p>${escapeHtml(agent.visibility_snippet)}</p>
+          <div class="agent-weight">
+            <div class="weight-track">
+              <div class="weight-fill" style="width:${weight}%"></div>
+            </div>
+            <div class="weight-label">影响力 ${weight}% · ${escapeHtml(agent.care_goal)} · 成长 ${growth.xp}%</div>
+          </div>
+        </article>
+      `;
+    })
+    .join("");
+}
+
+function createIdleAgents() {
+  return Object.keys(AGENT_LABELS).map((agent) => ({
+    agent,
+    visibility_snippet: "操作室待命中。",
+    weight: 0,
+    emotion_view: "",
+    care_goal: "",
+    stance: "待命",
+    energy: 1,
+    mood: "calm"
+  }));
+}
+
+function updateAgentGrowthFromPayload(growth) {
+  if (growth?.agentGrowth) {
+    state.agentGrowth = growth.agentGrowth;
+  }
 }
 
 function resetAttachments() {
@@ -349,78 +821,6 @@ async function loadPersistedMemories() {
   }
 }
 
-function renderAgentCards(agents, dominantAgent) {
-  if (!agents.length) {
-    agentGrid.innerHTML = Object.entries(AGENT_LABELS)
-      .map(
-        ([agent, label]) => `
-          <article class="agent-card" style="--agent-color:${AGENT_COLORS[agent]}">
-            <div class="agent-head">
-              <div class="agent-title">
-                <span class="agent-dot"></span>
-                <strong>${label}</strong>
-              </div>
-              <span class="tag">待命</span>
-            </div>
-            <p class="muted">还没有收到本轮讨论内容。</p>
-            <div class="agent-weight">
-              <div class="weight-track"><div class="weight-fill" style="width:0%"></div></div>
-              <div class="weight-label">影响力 0%</div>
-            </div>
-          </article>
-        `
-      )
-      .join("");
-    return;
-  }
-
-  agentGrid.innerHTML = agents
-    .map((agent) => {
-      const weight = Math.round(agent.weight * 100);
-      const dominantClass = agent.agent === dominantAgent ? "is-dominant" : "";
-      const growth = state.agentGrowth[agent.agent] ?? { level: 1, xp: 0 };
-      return `
-        <article class="agent-card ${dominantClass}" style="--agent-color:${AGENT_COLORS[agent.agent]}">
-          <div class="agent-head">
-            <div class="agent-title">
-              <span class="agent-dot"></span>
-              <strong>${AGENT_LABELS[agent.agent]}</strong>
-            </div>
-            <span class="tag">${agent.agent === dominantAgent ? "主导中" : `Lv.${growth.level}`}</span>
-          </div>
-          <p>${escapeHtml(agent.visibility_snippet)}</p>
-          <div class="agent-weight">
-            <div class="weight-track">
-              <div class="weight-fill" style="width:${weight}%"></div>
-            </div>
-            <div class="weight-label">影响力 ${weight}% · ${escapeHtml(agent.care_goal)} · 成长 ${growth.xp}%</div>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
-}
-
-function updateAgentGrowth(agents, growth) {
-  const growthBoost = Math.max(4, Math.round((growth?.interactionCount ?? 1) / 2));
-  agents.forEach((agent) => {
-    const current = state.agentGrowth[agent.agent] ?? { level: 1, xp: 0 };
-    const xpGain = Math.max(3, Math.round(agent.weight * 16) + growthBoost);
-    let nextXp = current.xp + xpGain;
-    let nextLevel = current.level;
-
-    while (nextXp >= 100) {
-      nextXp -= 100;
-      nextLevel += 1;
-    }
-
-    state.agentGrowth[agent.agent] = {
-      level: nextLevel,
-      xp: nextXp
-    };
-  });
-}
-
 function renderOwnerGlyph(owner) {
   const map = {
     system: "舱",
@@ -449,6 +849,16 @@ function renderOwnerLabel(owner) {
   return map[owner] ?? owner;
 }
 
+function delay(ms) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, ms);
+  });
+}
+
+function clamp(value, min, max) {
+  return Math.min(max, Math.max(min, value));
+}
+
 function escapeHtml(value) {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -457,3 +867,29 @@ function escapeHtml(value) {
     .replaceAll('"', "&quot;")
     .replaceAll("'", "&#39;");
 }
+
+if (typeof window !== "undefined") {
+  window.__ZHJI_DEBUG__ = {
+    renderCyberTown,
+    renderPixelStage,
+    renderPixelLinks,
+    resolvePixelAgentPosition,
+    resolvePixelAgentState,
+    resolvePixelLinkState,
+    syncMainWorkbenchState,
+    createIdleAgents,
+    state
+  };
+}
+
+export {
+  createIdleAgents,
+  renderCyberTown,
+  renderPixelLinks,
+  renderPixelStage,
+  resolvePixelAgentPosition,
+  resolvePixelAgentState,
+  resolvePixelLinkState,
+  syncMainWorkbenchState,
+  state
+};

@@ -16,6 +16,13 @@ import { SafetyService } from "./safetyService.js";
 
 export class ChatPipeline {
   private readonly growthBySession = new Map<string, GrowthState>();
+  private readonly agentGrowthBySession = new Map<
+    string,
+    Record<
+      EmotionAgentOutput["agent"],
+      { level: number; xp: number; temperamentShift: string }
+    >
+  >();
 
   constructor(
     private readonly safetyService: SafetyService,
@@ -92,15 +99,22 @@ export class ChatPipeline {
     );
     const dominantAgent =
       emotionAgents.slice().sort((left, right) => right.weight - left.weight)[0]?.agent ?? "joy";
-    const growth = this.updateGrowthState(input.sessionId, relevantMemories.length, storedMemories.length);
+    const growth = this.updateGrowthState(
+      input.sessionId,
+      relevantMemories.length,
+      storedMemories.length,
+      emotionAgents
+    );
     const tasks = this.buildConsoleTasks({
       sourceText,
       visualContext,
       relevantMemories: relevantMemories.map((item) => item.text),
+      emotionAgents,
       dominantAgent,
       reply,
       degraded
     });
+    const sequence = this.buildConsoleSequence(emotionAgents, dominantAgent, reply.reply);
 
     return {
       message: reply,
@@ -109,12 +123,16 @@ export class ChatPipeline {
         visibility_snippet: agent.visibility_snippet,
         weight: agent.weight,
         emotion_view: agent.emotion_view,
-        care_goal: agent.care_goal
+        care_goal: agent.care_goal,
+        stance: this.buildAgentStance(agent),
+        energy: this.buildAgentEnergy(agent),
+        mood: this.buildAgentMood(agent)
       })),
       console: {
         dominantAgent,
         consensusSummary: reply.emotionalSummary,
-        tasks
+        tasks,
+        sequence
       },
       memory: {
         newMemories: storedMemories.map((item) => ({
@@ -270,52 +288,143 @@ export class ChatPipeline {
     sourceText: string;
     visualContext: VisualContext | null;
     relevantMemories: string[];
+    emotionAgents: EmotionAgentOutput[];
     dominantAgent: ChatApiResponse["console"]["dominantAgent"];
     reply: ChatResponsePayload;
     degraded: boolean;
   }): ChatApiResponse["console"]["tasks"] {
     const taskStatus: "completed" | "fallback" = input.degraded ? "fallback" : "completed";
-    return [
+    const baseTasks: ChatApiResponse["console"]["tasks"] = [
       {
         id: "sense-input",
+        phase: "input-arrival",
         title: "接管输入舱",
         owner: "system" as const,
         detail: input.visualContext
           ? "控制室正在同时读取文字、图片或语音信号。"
           : "控制室已接住这轮用户输入并送往各工位。",
+        priority: 1,
+        movement: "arrive",
+        canInterrupt: false,
+        status: taskStatus
+      },
+      {
+        id: "fear-scan",
+        phase: "risk-scan",
+        title: "风险扫描",
+        owner: "fear",
+        detail: "Fear 先检查不确定性、危险和后续风险。",
+        priority: 2,
+        movement: "step-forward",
+        canInterrupt: false,
+        status: taskStatus
+      },
+      {
+        id: "disgust-filter",
+        phase: "filter",
+        title: "社交过滤",
+        owner: "disgust",
+        detail: "Disgust 过滤掉假安慰、别扭表达和不合时宜的反应。",
+        priority: 3,
+        movement: "step-forward",
+        canInterrupt: false,
+        status: taskStatus
+      },
+      {
+        id: "anger-boundary",
+        phase: "boundary",
+        title: "边界判断",
+        owner: "anger",
+        detail: "Anger 评估是否有委屈、是否该站在用户这边守住边界。",
+        priority: 4,
+        movement: "step-forward",
+        canInterrupt: true,
+        status: taskStatus
+      },
+      {
+        id: "sadness-empathy",
+        phase: "empathy",
+        title: "共情接住",
+        owner: "sadness",
+        detail: "Sadness 接住脆弱，让回复先理解再建议。",
+        priority: 5,
+        movement: "step-forward",
+        canInterrupt: true,
+        status: taskStatus
+      },
+      {
+        id: "joy-hope",
+        phase: "hope",
+        title: "希望整合",
+        owner: "joy",
+        detail: "Joy 负责收束气氛，让回复有亮度但不虚假。",
+        priority: 6,
+        movement: "step-forward",
+        canInterrupt: true,
         status: taskStatus
       },
       {
         id: "memory-scan",
+        phase: "interrupt",
         title: "翻查记忆柜",
         owner: "memory" as const,
         detail:
           input.relevantMemories.length > 0
             ? `调取到 ${input.relevantMemories.length} 条相关记忆，供情绪室参考。`
             : "本轮没有命中旧记忆，按当下情绪现场判断。",
+        priority: 7,
+        movement: "interrupt",
+        canInterrupt: false,
         status: taskStatus
       },
       {
         id: "emotion-roundtable",
-        title: "情绪圆桌讨论",
+        phase: "dominance",
+        title: "抢控制台",
         owner: input.dominantAgent,
-        detail: `五个情绪完成讨论，本轮由${input.dominantAgent}工位取得主导权。`,
+        detail: `五个情绪完成争论，本轮由${input.dominantAgent}工位取得主导权。`,
+        priority: 8,
+        movement: "take-console",
+        canInterrupt: false,
         status: taskStatus
       },
       {
         id: "baby-compose",
+        phase: "compose",
         title: "主脑汇总发言",
         owner: "baby" as const,
         detail: input.reply.reply,
+        priority: 9,
+        movement: "return",
+        canInterrupt: false,
         status: taskStatus
       }
     ];
+
+    const interruptions = input.emotionAgents
+      .filter((agent) => agent.agent !== input.dominantAgent)
+      .sort((left, right) => right.weight - left.weight)
+      .slice(0, 2)
+      .map((agent, index) => ({
+        id: `interrupt-${agent.agent}`,
+        phase: "interrupt" as const,
+        title: `${agent.agent} 插话`,
+        owner: agent.agent,
+        detail: agent.visibility_snippet,
+        priority: 7 + index / 10,
+        movement: "interrupt" as const,
+        canInterrupt: true,
+        status: taskStatus
+      }));
+
+    return [...baseTasks.slice(0, 6), ...interruptions, ...baseTasks.slice(6)];
   }
 
   private updateGrowthState(
     sessionId: string,
     relevantMemoryCount: number,
-    newMemoryCount: number
+    newMemoryCount: number,
+    emotionAgents: EmotionAgentOutput[]
   ): GrowthState {
     const previous = this.growthBySession.get(sessionId) ?? {
       interactionCount: 0,
@@ -333,14 +442,159 @@ export class ChatPipeline {
     const stage =
       understandingScore >= 70 ? "懂你期" : understandingScore >= 35 ? "熟悉期" : "幼态";
 
+    const agentGrowth = this.updateAgentGrowthState(sessionId, emotionAgents);
+
     const nextState = {
       interactionCount,
       understandingScore,
       intimacyScore,
-      stage
+      stage,
+      agentGrowth
     } satisfies GrowthState;
 
     this.growthBySession.set(sessionId, nextState);
     return nextState;
+  }
+
+  private updateAgentGrowthState(
+    sessionId: string,
+    emotionAgents: EmotionAgentOutput[]
+  ): NonNullable<GrowthState["agentGrowth"]> {
+    const current =
+      this.agentGrowthBySession.get(sessionId) ?? {
+        joy: { level: 1, xp: 0, temperamentShift: "更会点亮气氛" },
+        sadness: { level: 1, xp: 0, temperamentShift: "更会安静接住情绪" },
+        anger: { level: 1, xp: 0, temperamentShift: "更懂得保护边界" },
+        fear: { level: 1, xp: 0, temperamentShift: "更会预判风险" },
+        disgust: { level: 1, xp: 0, temperamentShift: "更会过滤别扭表达" }
+      };
+
+    for (const agent of emotionAgents) {
+      const entry = current[agent.agent];
+      const gainedXp = Math.max(6, Math.round(agent.weight * 24));
+      entry.xp += gainedXp;
+      if (entry.xp >= 100) {
+        entry.level += Math.floor(entry.xp / 100);
+        entry.xp = entry.xp % 100;
+      }
+    }
+
+    this.agentGrowthBySession.set(sessionId, current);
+    return current;
+  }
+
+  private buildAgentStance(agent: EmotionAgentOutput) {
+    const stanceMap = {
+      joy: "提亮",
+      sadness: "安抚",
+      anger: "护边界",
+      fear: "提醒",
+      disgust: "过滤"
+    } as const;
+    return stanceMap[agent.agent];
+  }
+
+  private buildAgentEnergy(agent: EmotionAgentOutput) {
+    return Math.max(1, Math.min(5, Math.round(agent.weight * 5)));
+  }
+
+  private buildAgentMood(agent: EmotionAgentOutput): "calm" | "alert" | "supportive" | "heated" | "bright" {
+    const moodMap = {
+      joy: "bright",
+      sadness: "supportive",
+      anger: "heated",
+      fear: "alert",
+      disgust: "calm"
+    } as const;
+    return moodMap[agent.agent];
+  }
+
+  private buildConsoleSequence(
+    emotionAgents: EmotionAgentOutput[],
+    dominantAgent: ChatApiResponse["console"]["dominantAgent"],
+    reply: string
+  ): ChatApiResponse["console"]["sequence"] {
+    const byAgent = Object.fromEntries(emotionAgents.map((agent) => [agent.agent, agent])) as Record<
+      EmotionAgentOutput["agent"],
+      EmotionAgentOutput
+    >;
+    const fixedOrder: EmotionAgentOutput["agent"][] = ["fear", "disgust", "anger", "sadness", "joy"];
+    const interruptions = fixedOrder
+      .filter((agent) => agent !== dominantAgent)
+      .sort((left, right) => byAgent[right].weight - byAgent[left].weight)
+      .slice(0, 2);
+
+    const sequence: ChatApiResponse["console"]["sequence"] = [
+      {
+        id: "seq-input",
+        actor: "system",
+        mode: "announce",
+        detail: "新消息进入操作室，控制台开始亮起。",
+        durationMs: 700,
+        phase: "input-arrival"
+      }
+    ];
+
+    const phaseMap = {
+      fear: "risk-scan",
+      disgust: "filter",
+      anger: "boundary",
+      sadness: "empathy",
+      joy: "hope"
+    } as const;
+
+    fixedOrder.forEach((agent, index) => {
+      sequence.push({
+        id: `seq-${agent}`,
+        actor: agent,
+        mode: "speak",
+        detail: byAgent[agent].visibility_snippet,
+        durationMs: 900,
+        phase: phaseMap[agent]
+      });
+
+      if (index === 2 && interruptions[0]) {
+        sequence.push({
+          id: `seq-interrupt-${interruptions[0]}`,
+          actor: interruptions[0],
+          mode: "interrupt",
+          detail: byAgent[interruptions[0]].visibility_snippet,
+          durationMs: 680,
+          phase: "interrupt"
+        });
+      }
+    });
+
+    if (interruptions[1]) {
+      sequence.push({
+        id: `seq-interrupt-${interruptions[1]}`,
+        actor: interruptions[1],
+        mode: "interrupt",
+        detail: byAgent[interruptions[1]].visibility_snippet,
+        durationMs: 640,
+        phase: "interrupt"
+      });
+    }
+
+    sequence.push(
+      {
+        id: "seq-dominance",
+        actor: dominantAgent,
+        mode: "take-console",
+        detail: `${dominantAgent} 抢到了中央控制台，准备拍板。`,
+        durationMs: 900,
+        phase: "dominance"
+      },
+      {
+        id: "seq-compose",
+        actor: "baby",
+        mode: "compose",
+        detail: reply,
+        durationMs: 1000,
+        phase: "compose"
+      }
+    );
+
+    return sequence;
   }
 }

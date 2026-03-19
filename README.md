@@ -17,6 +17,37 @@ copy .env.example .env
 npm run dev
 ```
 
+## Zeabur 部署
+
+推荐直接用 Docker 部署到 Zeabur，本仓库已提供 `Dockerfile`。
+
+### 需要的环境变量
+
+```env
+CREATION_AI_BASE_URL=https://your-api-base/v1
+CREATION_AI_API_KEY=your-api-key
+MEMORY_STORAGE_PATH=/data/memories.json
+MODEL_BABY_ORCHESTRATOR=gpt-5-chat-latest
+MODEL_EMOTION_AGENT=gpt-5-mini
+MODEL_IMAGE_PERCEPTION=gpt-4o
+MODEL_AUDIO_TRANSCRIBE=gpt-4o-transcribe
+MODEL_AUDIO_TTS=gpt-4o-mini-tts
+MODEL_EMBEDDING=text-embedding-3-small
+MODEL_MODERATION=text-moderation-latest
+MODEL_IMAGE_GENERATION=gpt-image-1-mini
+```
+
+### 持久化存储
+
+- 记忆默认写入 `MEMORY_STORAGE_PATH`
+- 在 Zeabur 中建议挂载一个 Volume 到 `/data`
+- 这样重启或重新部署后，`/data/memories.json` 不会丢失
+
+### 健康检查
+
+- 部署完成后先访问 `GET /health`
+- 返回 200 且 `storage.memoryFile` 正确即可继续验证聊天功能
+
 ## 关键约束
 
 - 只能由服务端访问模型中转站

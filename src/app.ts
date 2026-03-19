@@ -65,7 +65,7 @@ export function createApp() {
   );
 
   const safetyService = new SafetyService(aiGateway, config.MODEL_MODERATION);
-  const memoryService = new MemoryService(aiGateway, config.MODEL_EMBEDDING);
+  const memoryService = new MemoryService(aiGateway, config.MODEL_EMBEDDING, config.MEMORY_STORAGE_PATH);
   const perceptionService = new PerceptionService(aiGateway, config.MODEL_IMAGE_PERCEPTION);
   const emotionRuntime = new EmotionAgentRuntime(aiGateway, config.MODEL_EMOTION_AGENT);
   const babyOrchestrator = new BabyOrchestrator(aiGateway, config.MODEL_BABY_ORCHESTRATOR);
@@ -98,6 +98,9 @@ export function createApp() {
         embedding: config.MODEL_EMBEDDING,
         moderation: config.MODEL_MODERATION,
         imageGeneration: config.MODEL_IMAGE_GENERATION
+      },
+      storage: {
+        memoryFile: config.MEMORY_STORAGE_PATH
       }
     });
   });

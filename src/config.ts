@@ -7,6 +7,7 @@ const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   CREATION_AI_BASE_URL: z.string().url(),
   CREATION_AI_API_KEY: z.string().min(1),
+  MEMORY_STORAGE_PATH: z.string().min(1).default("data/memories.json"),
   MODEL_BABY_ORCHESTRATOR: z.string().default("gpt-5-chat-latest"),
   MODEL_EMOTION_AGENT: z.string().default("gpt-5-mini"),
   MODEL_IMAGE_PERCEPTION: z.string().default("gpt-4o"),

@@ -112,10 +112,18 @@ describe("app", () => {
     expect(response.status).toBe(200);
     expect(response.body.message.reply).toContain("我在");
     expect(response.body.agents).toHaveLength(5);
+    expect(response.body.agents[0].stance).toBeTruthy();
+    expect(response.body.agents[0].energy).toBeGreaterThan(0);
+    expect(response.body.agents[0].mood).toBeTruthy();
     expect(response.body.console.dominantAgent).toBeTruthy();
     expect(response.body.console.tasks).toBeInstanceOf(Array);
+    expect(response.body.console.tasks[0].phase).toBeTruthy();
+    expect(response.body.console.tasks[0].movement).toBeTruthy();
+    expect(response.body.console.sequence).toBeInstanceOf(Array);
+    expect(response.body.console.sequence[0].mode).toBeTruthy();
     expect(response.body.memory.newMemories).toBeInstanceOf(Array);
     expect(response.body.growth.stage).toBeTruthy();
+    expect(response.body.growth.agentGrowth).toBeTruthy();
     expect(response.body.meta.visualContextPresent).toBe(false);
   });
 

@@ -21,6 +21,14 @@ export type GrowthState = {
   understandingScore: number;
   intimacyScore: number;
   stage: "幼态" | "熟悉期" | "懂你期";
+  agentGrowth?: Record<
+    EmotionAgentName,
+    {
+      level: number;
+      xp: number;
+      temperamentShift: string;
+    }
+  >;
 };
 
 export type VisualContext = {
@@ -73,16 +81,49 @@ export type ChatApiResponse = {
     weight: number;
     emotion_view: string;
     care_goal: string;
+    stance: string;
+    energy: number;
+    mood: "calm" | "alert" | "supportive" | "heated" | "bright";
   }>;
   console: {
     dominantAgent: EmotionAgentName;
     consensusSummary: string;
     tasks: Array<{
       id: string;
+      phase:
+        | "input-arrival"
+        | "risk-scan"
+        | "filter"
+        | "boundary"
+        | "empathy"
+        | "hope"
+        | "interrupt"
+        | "dominance"
+        | "compose";
       title: string;
       owner: EmotionAgentName | "system" | "memory" | "baby";
       detail: string;
+      priority: number;
+      movement: "arrive" | "step-forward" | "interrupt" | "take-console" | "return";
+      canInterrupt: boolean;
       status: "completed" | "fallback";
+    }>;
+    sequence: Array<{
+      id: string;
+      actor: EmotionAgentName | "system" | "baby";
+      mode: "announce" | "speak" | "interrupt" | "take-console" | "compose";
+      detail: string;
+      durationMs: number;
+      phase:
+        | "input-arrival"
+        | "risk-scan"
+        | "filter"
+        | "boundary"
+        | "empathy"
+        | "hope"
+        | "interrupt"
+        | "dominance"
+        | "compose";
     }>;
   };
   memory: {
