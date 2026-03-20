@@ -158,7 +158,20 @@ export function createApp() {
   // 获取登录 URL
   app.get("/api/auth/login", (req, res) => {
     const { redirect_uri } = req.query;
-    const { url, state } = secondMeAuth.generateLoginUrl(redirect_uri as string | undefined);
+    const { url, state, codeVerifier, redirectUri } = secondMeAuth.generateLoginUrl(
+      redirect_uri as string | undefined
+    );
+
+    const cookieOptions = {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax" as const,
+      maxAge: 10 * 60 * 1000
+    };
+
+    res.cookie("oauth_state", state, cookieOptions);
+    res.cookie("oauth_code_verifier", codeVerifier, cookieOptions);
+    res.cookie("oauth_redirect_uri", redirectUri, cookieOptions);
     res.json({ loginUrl: url, state });
   });
 
@@ -166,7 +179,16 @@ export function createApp() {
   app.get("/api/auth/callback", async (req, res) => {
     try {
       const { code, state } = authCallbackSchema.parse(req.query);
-      const { sessionToken, user } = await secondMeAuth.handleCallback(code, state);
+      const expectedState = req.cookies?.oauth_state;
+      const codeVerifier = req.cookies?.oauth_code_verifier;
+      const redirectUri = req.cookies?.oauth_redirect_uri;
+      const { sessionToken } = await secondMeAuth.handleCallback(
+        code,
+        state,
+        expectedState,
+        redirectUri,
+        codeVerifier
+      );
 
       // 设置 session cookie
       res.cookie("session_token", sessionToken, {
@@ -175,11 +197,17 @@ export function createApp() {
         sameSite: "lax",
         maxAge: 30 * 24 * 60 * 60 * 1000 // 30 天
       });
+      res.clearCookie("oauth_state");
+      res.clearCookie("oauth_code_verifier");
+      res.clearCookie("oauth_redirect_uri");
 
       // 重定向到前端
       res.redirect("/?auth=success");
     } catch (error) {
       console.error("Auth callback error:", error);
+      res.clearCookie("oauth_state");
+      res.clearCookie("oauth_code_verifier");
+      res.clearCookie("oauth_redirect_uri");
       res.redirect("/?auth=error");
     }
   });

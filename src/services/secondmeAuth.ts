@@ -42,7 +42,6 @@ interface SecondMeAuthOptions {
 
 export class SecondMeAuthService {
   private sessions = new Map<string, SessionData>();
-  private pendingStates = new Map<string, { redirectUri: string; codeVerifier: string }>();
 
   constructor(
     private readonly clientId: string,
@@ -54,22 +53,23 @@ export class SecondMeAuthService {
   /**
    * 生成 OAuth 登录 URL
    */
-  generateLoginUrl(redirectUri?: string): { url: string; state: string } {
+  generateLoginUrl(redirectUri?: string): {
+    url: string;
+    state: string;
+    codeVerifier: string;
+    redirectUri: string;
+  } {
     const state = crypto.randomBytes(16).toString("hex");
     const codeVerifier = crypto.randomBytes(32).toString("base64url");
+    const resolvedRedirectUri = redirectUri || this.redirectUri;
     const codeChallenge = crypto
       .createHash("sha256")
       .update(codeVerifier)
       .digest("base64url");
 
-    this.pendingStates.set(state, {
-      redirectUri: redirectUri || this.redirectUri,
-      codeVerifier
-    });
-
     const params = new URLSearchParams({
       client_id: this.clientId,
-      redirect_uri: redirectUri || this.redirectUri,
+      redirect_uri: resolvedRedirectUri,
       response_type: "code",
       scope: "user.info",
       state,
@@ -79,7 +79,9 @@ export class SecondMeAuthService {
 
     return {
       url: `${this.options.oauthUrl}?${params.toString()}`,
-      state
+      state,
+      codeVerifier,
+      redirectUri: resolvedRedirectUri
     };
   }
 
@@ -88,16 +90,14 @@ export class SecondMeAuthService {
    */
   async handleCallback(
     code: string,
-    state: string
+    state: string,
+    expectedState: string,
+    redirectUri: string,
+    codeVerifier: string
   ): Promise<{ sessionToken: string; user: SecondMeUserProfile }> {
-    // 验证 state
-    const pendingState = this.pendingStates.get(state);
-    if (!pendingState) {
+    if (!state || !expectedState || state !== expectedState || !redirectUri || !codeVerifier) {
       throw new Error("Invalid or expired state");
     }
-
-    const { redirectUri, codeVerifier } = pendingState;
-    this.pendingStates.delete(state);
 
     // 交换 code 获取 access token
     const tokenResponse = await this.exchangeCodeForToken(code, redirectUri, codeVerifier);

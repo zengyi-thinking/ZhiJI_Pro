@@ -16,6 +16,7 @@ const logoutButton = document.getElementById("logoutButton");
 
 // 检查 URL 参数中是否有登录成功的回调
 const urlParams = new URLSearchParams(window.location.search);
+const authCallbackStatus = urlParams.get("auth");
 if (urlParams.get("auth") === "success") {
   // 登录成功，清除 URL 参数
   window.history.replaceState({}, document.title, window.location.pathname);
@@ -120,6 +121,12 @@ async function checkAuthStatus() {
   authState.isAuthenticated = false;
   state.userId = "";
   updateAuthUI();
+  if (authCallbackStatus === "error") {
+    chatStatus.textContent = "SecondMe 登录回调失败，请重新点击登录。";
+    authState.redirectInFlight = false;
+    openLoginModal();
+    return;
+  }
   void startSecondMeLogin();
 }
 
