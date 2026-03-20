@@ -18,19 +18,23 @@ MODEL_MODERATION=text-moderation-latest
 MODEL_IMAGE_GENERATION=gpt-image-1-mini
 ```
 
-### Second Me OAuth 配置（已获取）
+### SecondMe OAuth 配置
 ```env
-SECONDME_CLIENT_ID=bbe96e19-bcef-449f-8f70-8505705c805d
-SECONDME_CLIENT_SECRET=356e3de64dd50b246a17c836c4368070a180482ac794d3e3aae3b727c5d20bf9
-SECONDME_REDIRECT_URI=http://zhiji-pro.zeabur.app/api/auth/callback
-SECONDME_BASE_URL=https://second.me
-SESSION_SECRET=zhiji-pro-session-secret-change-in-production
+SECONDME_CLIENT_ID=your-secondme-client-id
+SECONDME_CLIENT_SECRET=your-secondme-client-secret
+SECONDME_REDIRECT_URI=https://zhiji-pro.zeabur.app/api/auth/callback
+SECONDME_API_BASE_URL=https://api.mindverse.com/gate/lab
+SECONDME_OAUTH_URL=https://go.second.me/oauth/
+SECONDME_TOKEN_ENDPOINT=https://api.mindverse.com/gate/lab/api/oauth/token/code
+SECONDME_REFRESH_ENDPOINT=https://api.mindverse.com/gate/lab/api/oauth/token/refresh
+SECONDME_USERINFO_ENDPOINT=https://api.mindverse.com/gate/lab/api/user/info
+SESSION_SECRET=replace-with-a-random-secret
 ```
 
 ### 其他配置
 ```env
 MEMORY_STORAGE_PATH=data/memories.json
-PORT=3000
+PORT=8080
 ```
 
 ---
@@ -55,11 +59,15 @@ npm install -g @zeabur/cli
 zeabur login
 
 # 设置环境变量
-zeabur variables set SECONDME_CLIENT_ID "bbe96e19-bcef-449f-8f70-8505705c805d"
-zeabur variables set SECONDME_CLIENT_SECRET "356e3de64dd50b246a17c836c4368070a180482ac794d3e3aae3b727c5d20bf9"
-zeabur variables set SECONDME_REDIRECT_URI "http://zhiji-pro.zeabur.app/api/auth/callback"
-zeabur variables set SECONDME_BASE_URL "https://second.me"
-zeabur variables set SESSION_SECRET "zhiji-pro-session-secret-change-in-production"
+zeabur variables set SECONDME_CLIENT_ID "your-secondme-client-id"
+zeabur variables set SECONDME_CLIENT_SECRET "your-secondme-client-secret"
+zeabur variables set SECONDME_REDIRECT_URI "https://zhiji-pro.zeabur.app/api/auth/callback"
+zeabur variables set SECONDME_API_BASE_URL "https://api.mindverse.com/gate/lab"
+zeabur variables set SECONDME_OAUTH_URL "https://go.second.me/oauth/"
+zeabur variables set SECONDME_TOKEN_ENDPOINT "https://api.mindverse.com/gate/lab/api/oauth/token/code"
+zeabur variables set SECONDME_REFRESH_ENDPOINT "https://api.mindverse.com/gate/lab/api/oauth/token/refresh"
+zeabur variables set SECONDME_USERINFO_ENDPOINT "https://api.mindverse.com/gate/lab/api/user/info"
+zeabur variables set SESSION_SECRET "replace-with-a-random-secret"
 
 # AI 配置（替换你的 API Key）
 zeabur variables set CREATION_AI_BASE_URL "https://ai.t8star.cn/v1"
@@ -85,7 +93,7 @@ zeabur restart
 
 ### 1. 健康检查
 ```bash
-curl http://zhiji-pro.zeabur.app/health
+curl https://zhiji-pro.zeabur.app/health
 ```
 
 预期返回：
@@ -98,17 +106,17 @@ curl http://zhiji-pro.zeabur.app/health
 ```
 
 ### 2. OAuth 登录测试
-访问 http://zhiji-pro.zeabur.app，点击"登录"按钮，应该跳转到 Second Me 授权页面。
+访问 `https://zhiji-pro.zeabur.app`，点击登录后，应该跳转到 `https://go.second.me/oauth/`。
 
 ### 3. 检查登录接口
 ```bash
-curl http://zhiji-pro.zeabur.app/api/auth/login
+curl https://zhiji-pro.zeabur.app/api/auth/login
 ```
 
 预期返回：
 ```json
 {
-  "loginUrl": "https://second.me/oauth/authorize?...",
+  "loginUrl": "https://go.second.me/oauth/?...",
   "state": "..."
 }
 ```
@@ -155,12 +163,12 @@ SECONDME_REDIRECT_URI=https://zhiji.yourdomain.com/api/auth/callback
 
 ## Second Me 应用设置检查
 
-在 https://develop.second.me/skill 确认以下配置：
+在 `https://develop.second.me/skill` 确认以下配置：
 
 | 配置项 | 值 |
 |--------|-----|
 | 应用名称 | 知机 Pro |
-| 回调 URL | http://zhiji-pro.zeabur.app/api/auth/callback |
-| 授权范围 | profile, email |
+| 回调 URL | https://zhiji-pro.zeabur.app/api/auth/callback |
+| 授权范围 | user.info |
 
 一切就绪后，你的应用就可以正常使用 Second Me 登录了！

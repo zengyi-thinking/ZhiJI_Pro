@@ -1,10 +1,11 @@
 import crypto from "node:crypto";
 
 interface SecondMeTokenResponse {
-  access_token: string;
-  token_type: string;
-  expires_in: number;
-  refresh_token?: string;
+  accessToken: string;
+  tokenType: string;
+  expiresIn: number;
+  refreshToken?: string;
+  scope?: string[];
 }
 
 interface SecondMeUserProfile {
@@ -26,6 +27,19 @@ interface SessionData {
   expiresAt: number;
 }
 
+interface SecondMeEnvelope<T> {
+  code: number;
+  data: T;
+  message?: string;
+}
+
+interface SecondMeAuthOptions {
+  oauthUrl: string;
+  tokenEndpoint: string;
+  refreshEndpoint: string;
+  userInfoEndpoint: string;
+}
+
 export class SecondMeAuthService {
   private sessions = new Map<string, SessionData>();
   private pendingStates = new Map<string, { redirectUri: string; codeVerifier: string }>();
@@ -34,7 +48,7 @@ export class SecondMeAuthService {
     private readonly clientId: string,
     private readonly clientSecret: string,
     private readonly redirectUri: string,
-    private readonly baseUrl: string = "https://second.me"
+    private readonly options: SecondMeAuthOptions
   ) {}
 
   /**
@@ -57,14 +71,14 @@ export class SecondMeAuthService {
       client_id: this.clientId,
       redirect_uri: redirectUri || this.redirectUri,
       response_type: "code",
-      scope: "profile email",
+      scope: "user.info",
       state,
       code_challenge: codeChallenge,
       code_challenge_method: "S256"
     });
 
     return {
-      url: `${this.baseUrl}/oauth/authorize?${params.toString()}`,
+      url: `${this.options.oauthUrl}?${params.toString()}`,
       state
     };
   }
@@ -89,7 +103,7 @@ export class SecondMeAuthService {
     const tokenResponse = await this.exchangeCodeForToken(code, redirectUri, codeVerifier);
 
     // 获取用户信息
-    const userProfile = await this.getUserProfile(tokenResponse.access_token);
+    const userProfile = await this.getUserProfile(tokenResponse.accessToken);
 
     // 创建会话
     const sessionToken = this.createSession(userProfile);
@@ -105,19 +119,21 @@ export class SecondMeAuthService {
     redirectUri: string,
     codeVerifier: string
   ): Promise<SecondMeTokenResponse> {
-    const response = await fetch(`${this.baseUrl}/oauth/token`, {
+    const body = new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+      code,
+      redirect_uri: redirectUri,
+      code_verifier: codeVerifier
+    });
+
+    const response = await fetch(this.options.tokenEndpoint, {
       method: "POST",
       headers: {
-        "Content-Type": "application/json"
+        "Content-Type": "application/x-www-form-urlencoded"
       },
-      body: JSON.stringify({
-        grant_type: "authorization_code",
-        client_id: this.clientId,
-        client_secret: this.clientSecret,
-        code,
-        redirect_uri: redirectUri,
-        code_verifier: codeVerifier
-      })
+      body: body.toString()
     });
 
     if (!response.ok) {
@@ -125,14 +141,19 @@ export class SecondMeAuthService {
       throw new Error(`Token exchange failed: ${error}`);
     }
 
-    return response.json();
+    const result = (await response.json()) as SecondMeEnvelope<SecondMeTokenResponse>;
+    if (result.code !== 0 || !result.data?.accessToken) {
+      throw new Error(`Token exchange failed: ${result.message || "invalid response payload"}`);
+    }
+
+    return result.data;
   }
 
   /**
    * 使用访问令牌获取用户信息
    */
   private async getUserProfile(accessToken: string): Promise<SecondMeUserProfile> {
-    const response = await fetch(`${this.baseUrl}/api/me`, {
+    const response = await fetch(this.options.userInfoEndpoint, {
       headers: {
         Authorization: `Bearer ${accessToken}`
       }
@@ -143,7 +164,32 @@ export class SecondMeAuthService {
       throw new Error(`Failed to fetch user profile: ${error}`);
     }
 
-    return response.json();
+    const result = (await response.json()) as SecondMeEnvelope<Record<string, unknown>>;
+    if (result.code !== 0 || !result.data) {
+      throw new Error(`Failed to fetch user profile: ${result.message || "invalid response payload"}`);
+    }
+
+    const profile = result.data;
+    const username =
+      this.stringValue(profile.username) ||
+      this.stringValue(profile.name) ||
+      this.stringValue(profile.nickname) ||
+      this.stringValue(profile.email) ||
+      "secondme-user";
+    const id =
+      this.stringValue(profile.id) ||
+      this.stringValue(profile.userId) ||
+      this.stringValue(profile.uid) ||
+      crypto.createHash("sha256").update(username).digest("hex").slice(0, 24);
+
+    return {
+      id,
+      username,
+      displayName: this.stringValue(profile.displayName) || this.stringValue(profile.nickname) || this.stringValue(profile.name),
+      email: this.stringValue(profile.email),
+      avatar: this.stringValue(profile.avatar) || this.stringValue(profile.avatarUrl),
+      bio: this.stringValue(profile.bio)
+    };
   }
 
   /**
@@ -203,5 +249,9 @@ export class SecondMeAuthService {
         this.sessions.delete(token);
       }
     }
+  }
+
+  private stringValue(value: unknown): string | undefined {
+    return typeof value === "string" && value.trim() ? value.trim() : undefined;
   }
 }

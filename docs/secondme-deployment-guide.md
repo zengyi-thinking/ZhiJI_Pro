@@ -2,7 +2,7 @@
 
 ## 概述
 
-知机 Pro 现已完整集成 Second Me OAuth 登录系统。用户可以通过 Second Me 账号登录，并授权获取 profile 信息。
+知机 Pro 已接入 SecondMe OAuth 登录骨架。当前目标是先跑通外部应用授权，再补标准 MCP endpoint。
 
 ## 已完成的功能
 
@@ -11,7 +11,7 @@
 1. **OAuth 认证服务** ([`src/services/secondmeAuth.ts`](../src/services/secondmeAuth.ts))
    - PKCE 流程支持
    - 会话管理
-   - 用户 profile 获取
+   - 按 SecondMe `{ code, data }` 响应结构解析 token 和用户信息
 
 2. **认证 API 端点**
    - `GET /api/auth/login` - 获取登录 URL
@@ -47,7 +47,7 @@
    - `Client Secret`
 4. 设置回调 URL：
    ```
-   http://zhiji-pro.zeabur.app/api/auth/callback
+   https://zhiji-pro.zeabur.app/api/auth/callback
    ```
 
 ### 2. 配置环境变量
@@ -58,8 +58,12 @@
 # Second Me OAuth 配置
 SECONDME_CLIENT_ID=your-secondme-client-id
 SECONDME_CLIENT_SECRET=your-secondme-client-secret
-SECONDME_REDIRECT_URI=http://zhiji-pro.zeabur.app/api/auth/callback
-SECONDME_BASE_URL=https://second.me
+SECONDME_REDIRECT_URI=https://zhiji-pro.zeabur.app/api/auth/callback
+SECONDME_API_BASE_URL=https://api.mindverse.com/gate/lab
+SECONDME_OAUTH_URL=https://go.second.me/oauth/
+SECONDME_TOKEN_ENDPOINT=https://api.mindverse.com/gate/lab/api/oauth/token/code
+SECONDME_REFRESH_ENDPOINT=https://api.mindverse.com/gate/lab/api/oauth/token/refresh
+SECONDME_USERINFO_ENDPOINT=https://api.mindverse.com/gate/lab/api/user/info
 SESSION_SECRET=your-random-session-secret
 ```
 
@@ -83,7 +87,7 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ### 4. 验证部署
 
-1. 访问 http://zhiji-pro.zeabur.app
+1. 访问 https://zhiji-pro.zeabur.app
 2. 点击"登录"按钮
 3. 应该跳转到 Second Me 授权页面
 4. 授权后自动返回并显示用户信息
@@ -92,13 +96,13 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 ```bash
 # 健康检查
-curl http://zhiji-pro.zeabur.app/health
+curl https://zhiji-pro.zeabur.app/health
 
 # 获取登录 URL
-curl http://zhiji-pro.zeabur.app/api/auth/login
+curl https://zhiji-pro.zeabur.app/api/auth/login
 
 # 检查用户状态（需要 Cookie）
-curl http://zhiji-pro.zeabur.app/api/auth/me
+curl https://zhiji-pro.zeabur.app/api/auth/me
 ```
 
 ## MCP 配置更新
@@ -107,7 +111,7 @@ curl http://zhiji-pro.zeabur.app/api/auth/me
 
 1. **正确的端点 URL**
    ```json
-   "production": "http://zhiji-pro.zeabur.app"
+   "production": "https://zhiji-pro.zeabur.app"
    ```
 
 2. **认证配置**
@@ -115,7 +119,7 @@ curl http://zhiji-pro.zeabur.app/api/auth/me
    "auth": {
      "type": "oauth2",
      "provider": "secondme",
-     "scopes": ["profile", "email"]
+     "scopes": ["user.info"]
    }
    ```
 

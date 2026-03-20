@@ -114,7 +114,7 @@
     }
   ],
   "endpoints": {
-    "production": "http://zhiji-pro.zeabur.app",
+    "production": "https://zhiji-pro.zeabur.app",
     "health": "/health",
     "chat": "/api/chat",
     "chatStream": "/api/chat/stream",
@@ -132,9 +132,9 @@
   "auth": {
     "type": "oauth2",
     "provider": "secondme",
-    "scopes": ["profile", "email"],
-    "authorizationUrl": "https://second.me/oauth/authorize",
-    "tokenUrl": "https://second.me/oauth/token"
+    "scopes": ["user.info"],
+    "authorizationUrl": "https://go.second.me/oauth/",
+    "tokenUrl": "https://api.mindverse.com/gate/lab/api/oauth/token/code"
   },
   "metadata": {
     "category": "AI 助手",

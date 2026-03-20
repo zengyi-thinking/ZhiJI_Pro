@@ -1,0 +1,38 @@
+{
+  "version": "1.0",
+  "appName": "zhiji-pro",
+  "modules": ["auth", "chat", "profile"],
+  "config": {
+    "redirectUris": [
+      "http://localhost:3000/api/auth/callback",
+      "https://zhiji-pro.zeabur.app/api/auth/callback"
+    ],
+    "allowedScopes": ["user.info"]
+  },
+  "api": {
+    "baseUrl": "https://api.mindverse.com/gate/lab",
+    "oauthUrl": "https://go.second.me/oauth/",
+    "tokenEndpoint": "https://api.mindverse.com/gate/lab/api/oauth/token/code",
+    "refreshEndpoint": "https://api.mindverse.com/gate/lab/api/oauth/token/refresh",
+    "userInfoEndpoint": "https://api.mindverse.com/gate/lab/api/user/info"
+  },
+  "prd": {
+    "summary": "多 agent 情感陪伴助手，支持聊天、多模态感知、记忆成长与像素操作室可视化。",
+    "features": [
+      "SecondMe OAuth 登录",
+      "多 agent 情绪协商聊天",
+      "图片理解",
+      "语音播报",
+      "记忆检索与成长反馈"
+    ],
+    "targetUsers": "需要情感陪伴与轻互动养成体验的用户",
+    "designPreference": "像素操作室、多角色协作、头脑特工队式控制台"
+  },
+  "submission": {
+    "status": "oauth_ready_mcp_missing",
+    "notes": [
+      "OAuth 外部应用可先提交和联调",
+      "若要进入 OpenClaw / Skill 工具调用，还需补标准 MCP endpoint"
+    ]
+  }
+}

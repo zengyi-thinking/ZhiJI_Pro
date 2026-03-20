@@ -109,7 +109,12 @@ export function createApp() {
     config.SECONDME_CLIENT_ID,
     config.SECONDME_CLIENT_SECRET,
     config.SECONDME_REDIRECT_URI,
-    config.SECONDME_BASE_URL
+    {
+      oauthUrl: config.SECONDME_OAUTH_URL,
+      tokenEndpoint: config.SECONDME_TOKEN_ENDPOINT,
+      refreshEndpoint: config.SECONDME_REFRESH_ENDPOINT,
+      userInfoEndpoint: config.SECONDME_USERINFO_ENDPOINT
+    }
   );
 
   // 会话验证中间件
