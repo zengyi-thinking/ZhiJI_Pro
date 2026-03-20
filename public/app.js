@@ -1,7 +1,8 @@
 // ==================== 登录认证模块 ====================
 const authState = {
   user: null,
-  isAuthenticated: false
+  isAuthenticated: false,
+  redirectInFlight: false
 };
 
 const loginModal = document.getElementById("loginModal");
@@ -51,12 +52,16 @@ function requireLoginForInteraction(reason = "登录后才能开始和知机对�
   }
 
   chatStatus.textContent = reason;
-  openLoginModal();
+  void startSecondMeLogin();
   return true;
 }
 
-// Second Me 登录按钮点击
-secondmeLoginButton?.addEventListener("click", async () => {
+async function startSecondMeLogin() {
+  if (authState.redirectInFlight) {
+    return;
+  }
+
+  authState.redirectInFlight = true;
   try {
     const redirectUri = `${window.location.origin}/api/auth/callback`;
     const response = await fetch(`/api/auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`);
@@ -65,9 +70,16 @@ secondmeLoginButton?.addEventListener("click", async () => {
     const data = await response.json();
     window.location.href = data.loginUrl;
   } catch (error) {
+    authState.redirectInFlight = false;
     console.error("登录失败:", error);
+    openLoginModal();
     alert("登录失败，请稍后重试");
   }
+}
+
+// Second Me 登录按钮点击
+secondmeLoginButton?.addEventListener("click", () => {
+  void startSecondMeLogin();
 });
 
 // 退出登录
@@ -76,10 +88,9 @@ logoutButton?.addEventListener("click", async () => {
     await fetch("/api/auth/logout", { method: "POST" });
     authState.user = null;
     authState.isAuthenticated = false;
+    authState.redirectInFlight = false;
     updateAuthUI();
-    // 使用 demo 用户继续会话
-    state.userId = "demo-user";
-    alert("已退出登录");
+    void startSecondMeLogin();
   } catch (error) {
     console.error("登出失败:", error);
   }
@@ -93,6 +104,7 @@ async function checkAuthStatus() {
       const data = await response.json();
       authState.user = data.user;
       authState.isAuthenticated = true;
+      authState.redirectInFlight = false;
       // 更新 userId 为登录用户的 ID
       if (data.user?.userId) {
         state.userId = data.user.userId;
@@ -106,8 +118,9 @@ async function checkAuthStatus() {
 
   authState.user = null;
   authState.isAuthenticated = false;
-  state.userId = "demo-user";
+  state.userId = "";
   updateAuthUI();
+  void startSecondMeLogin();
 }
 
 // 更新认证 UI
