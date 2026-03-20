@@ -1,9 +1,9 @@
 FROM node:22-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install --production=false
+RUN npm ci --include=dev
 COPY . .
-RUN ./node_modules/.bin/tsc -p tsconfig.json
+RUN npm run build
 
 FROM node:22-alpine AS runtime
 WORKDIR /app
