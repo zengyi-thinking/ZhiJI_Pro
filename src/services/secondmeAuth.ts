@@ -153,23 +153,39 @@ export class SecondMeAuthService {
    * 使用访问令牌获取用户信息
    */
   private async getUserProfile(accessToken: string): Promise<SecondMeUserProfile> {
-    const response = await fetch(this.options.userInfoEndpoint, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`
+    const endpoints = this.getUserInfoEndpointCandidates();
+    let lastError = "unknown error";
+    let profile: Record<string, unknown> | null = null;
+
+    for (const endpoint of endpoints) {
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        lastError = `${endpoint} -> ${error}`;
+        if (response.status === 404) {
+          continue;
+        }
+        throw new Error(`Failed to fetch user profile: ${error}`);
       }
-    });
 
-    if (!response.ok) {
-      const error = await response.text();
-      throw new Error(`Failed to fetch user profile: ${error}`);
+      const result = (await response.json()) as SecondMeEnvelope<Record<string, unknown>>;
+      if (result.code === 0 && result.data) {
+        profile = result.data;
+        break;
+      }
+
+      lastError = `${endpoint} -> ${result.message || "invalid response payload"}`;
     }
 
-    const result = (await response.json()) as SecondMeEnvelope<Record<string, unknown>>;
-    if (result.code !== 0 || !result.data) {
-      throw new Error(`Failed to fetch user profile: ${result.message || "invalid response payload"}`);
+    if (!profile) {
+      throw new Error(`Failed to fetch user profile: ${lastError}`);
     }
 
-    const profile = result.data;
     const username =
       this.stringValue(profile.username) ||
       this.stringValue(profile.name) ||
@@ -190,6 +206,21 @@ export class SecondMeAuthService {
       avatar: this.stringValue(profile.avatar) || this.stringValue(profile.avatarUrl),
       bio: this.stringValue(profile.bio)
     };
+  }
+
+  private getUserInfoEndpointCandidates(): string[] {
+    const endpoints = new Set<string>([this.options.userInfoEndpoint]);
+
+    try {
+      const configured = new URL(this.options.userInfoEndpoint);
+      endpoints.add(new URL("/gate/lab/api/secondme/user/info", configured.origin).toString());
+      endpoints.add(new URL("/gate/lab/api/user/info", configured.origin).toString());
+    } catch {
+      endpoints.add("https://api.mindverse.com/gate/lab/api/secondme/user/info");
+      endpoints.add("https://api.mindverse.com/gate/lab/api/user/info");
+    }
+
+    return [...endpoints];
   }
 
   /**
