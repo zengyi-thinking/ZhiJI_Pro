@@ -4,6 +4,7 @@ import multer from "multer";
 import { z } from "zod";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import cookieParser from "cookie-parser";
 
 import { config } from "./config.js";
 import { AiGateway } from "./lib/aiGateway.js";
@@ -14,6 +15,7 @@ import { ExpressionService } from "./services/expressionService.js";
 import { MemoryService } from "./services/memoryService.js";
 import { PerceptionService } from "./services/perceptionService.js";
 import { SafetyService } from "./services/safetyService.js";
+import { SecondMeAuthService } from "./services/secondmeAuth.js";
 
 const chatRequestSchema = z
   .object({
@@ -54,6 +56,26 @@ const memoryQuerySchema = z.object({
   userId: z.string().min(1)
 });
 
+const authCallbackSchema = z.object({
+  code: z.string().min(1),
+  state: z.string().min(1)
+});
+
+// 扩展会话类型
+declare global {
+  namespace Express {
+    interface Request {
+      user?: {
+        userId: string;
+        username: string;
+        displayName?: string;
+        email?: string;
+        avatar?: string;
+      };
+    }
+  }
+}
+
 export function createApp() {
   const app = express();
   const upload = multer();
@@ -82,9 +104,106 @@ export function createApp() {
     babyOrchestrator
   );
 
-  app.use(cors());
+  // Second Me OAuth 服务
+  const secondMeAuth = new SecondMeAuthService(
+    config.SECONDME_CLIENT_ID,
+    config.SECONDME_CLIENT_SECRET,
+    config.SECONDME_REDIRECT_URI,
+    config.SECONDME_BASE_URL
+  );
+
+  // 会话验证中间件
+  const requireAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const sessionToken = req.cookies?.session_token || req.headers.authorization?.replace("Bearer ", "");
+    if (!sessionToken) {
+      return res.status(401).json({ error: "Unauthorized: No session token provided" });
+    }
+
+    const user = secondMeAuth.validateSession(sessionToken);
+    if (!user) {
+      return res.status(401).json({ error: "Unauthorized: Invalid or expired session" });
+    }
+
+    req.user = user;
+    next();
+  };
+
+  // 可选的会话中间件（如果存在则附加用户信息，否则继续）
+  const optionalAuth = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+    const sessionToken = req.cookies?.session_token || req.headers.authorization?.replace("Bearer ", "");
+    if (sessionToken) {
+      const user = secondMeAuth.validateSession(sessionToken);
+      if (user) {
+        req.user = user;
+      }
+    }
+    next();
+  };
+
+  app.use(cors({
+    origin: true,
+    credentials: true
+  }));
   app.use(express.json({ limit: "5mb" }));
+  app.use(cookieParser());
   app.use(express.static(path.join(rootDir, "public")));
+
+  // ===== Second Me OAuth 路由 =====
+
+  // 获取登录 URL
+  app.get("/api/auth/login", (req, res) => {
+    const { redirect_uri } = req.query;
+    const { url, state } = secondMeAuth.generateLoginUrl(redirect_uri as string | undefined);
+    res.json({ loginUrl: url, state });
+  });
+
+  // OAuth 回调
+  app.get("/api/auth/callback", async (req, res) => {
+    try {
+      const { code, state } = authCallbackSchema.parse(req.query);
+      const { sessionToken, user } = await secondMeAuth.handleCallback(code, state);
+
+      // 设置 session cookie
+      res.cookie("session_token", sessionToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: 30 * 24 * 60 * 60 * 1000 // 30 天
+      });
+
+      // 重定向到前端
+      res.redirect("/?auth=success");
+    } catch (error) {
+      console.error("Auth callback error:", error);
+      res.redirect("/?auth=error");
+    }
+  });
+
+  // 获取当前用户信息
+  app.get("/api/auth/me", (req, res) => {
+    const sessionToken = req.cookies?.session_token || req.headers.authorization?.replace("Bearer ", "");
+    if (!sessionToken) {
+      return res.status(401).json({ error: "Not authenticated" });
+    }
+
+    const user = secondMeAuth.validateSession(sessionToken);
+    if (!user) {
+      return res.status(401).json({ error: "Invalid or expired session" });
+    }
+
+    res.json({ user });
+  });
+
+  // 登出
+  app.post("/api/auth/logout", (req, res) => {
+    const sessionToken = req.cookies?.session_token || req.headers.authorization?.replace("Bearer ", "");
+    if (sessionToken) {
+      secondMeAuth.logout(sessionToken);
+    }
+
+    res.clearCookie("session_token");
+    res.json({ success: true });
+  });
 
   app.get("/health", (_req, res) => {
     res.json({
@@ -109,6 +228,35 @@ export function createApp() {
     const payload = chatRequestSchema.parse(req.body);
     const result = await chatPipeline.run(payload);
     res.json(result);
+  });
+
+  // SSE 流式聊天路由
+  app.post("/api/chat/stream", async (req, res) => {
+    const payload = chatRequestSchema.parse(req.body);
+
+    // 设置 SSE 响应头
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache, no-transform");
+    res.setHeader("Connection", "keep-alive");
+    res.setHeader("X-Accel-Buffering", "no"); // 禁用 Nginx 缓冲
+
+    // SSE 发送辅助函数
+    const sendEvent = (eventType: string, data: unknown) => {
+      res.write(`event: ${eventType}\n`);
+      res.write(`data: ${JSON.stringify(data)}\n\n`);
+    };
+
+    try {
+      await chatPipeline.runStream(payload, sendEvent);
+    } catch (error) {
+      sendEvent("error", {
+        message: error instanceof Error ? error.message : "未知错误",
+        phase: "pipeline_execution",
+        fallback: false
+      });
+    } finally {
+      res.end();
+    }
   });
 
   app.post("/api/perception/image-analyze", async (req, res) => {

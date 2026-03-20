@@ -1,3 +1,116 @@
+// ==================== 登录认证模块 ====================
+const authState = {
+  user: null,
+  isAuthenticated: false
+};
+
+const loginModal = document.getElementById("loginModal");
+const loginButton = document.getElementById("loginButton");
+const secondmeLoginButton = document.getElementById("secondmeLoginButton");
+const closeLoginModal = document.getElementById("closeLoginModal");
+const userProfile = document.getElementById("userProfile");
+const userAvatar = document.getElementById("userAvatar");
+const userName = document.getElementById("userName");
+const logoutButton = document.getElementById("logoutButton");
+
+// 检查 URL 参数中是否有登录成功的回调
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get("auth") === "success") {
+  // 登录成功，清除 URL 参数
+  window.history.replaceState({}, document.title, window.location.pathname);
+  checkAuthStatus();
+}
+
+// 初始化：检查登录状态
+checkAuthStatus();
+
+// 打开登录弹窗
+loginButton?.addEventListener("click", () => {
+  loginModal.showModal();
+});
+
+// 关闭登录弹窗
+closeLoginModal?.addEventListener("click", () => {
+  loginModal.close();
+});
+
+// 点击弹窗外部关闭
+loginModal?.addEventListener("click", (event) => {
+  if (event.target === loginModal) {
+    loginModal.close();
+  }
+});
+
+// Second Me 登录按钮点击
+secondmeLoginButton?.addEventListener("click", async () => {
+  try {
+    const response = await fetch("/api/auth/login");
+    if (!response.ok) throw new Error("获取登录链接失败");
+
+    const data = await response.json();
+    window.location.href = data.loginUrl;
+  } catch (error) {
+    console.error("登录失败:", error);
+    alert("登录失败，请稍后重试");
+  }
+});
+
+// 退出登录
+logoutButton?.addEventListener("click", async () => {
+  try {
+    await fetch("/api/auth/logout", { method: "POST" });
+    authState.user = null;
+    authState.isAuthenticated = false;
+    updateAuthUI();
+    // 使用 demo 用户继续会话
+    state.userId = "demo-user";
+    alert("已退出登录");
+  } catch (error) {
+    console.error("登出失败:", error);
+  }
+});
+
+// 检查认证状态
+async function checkAuthStatus() {
+  try {
+    const response = await fetch("/api/auth/me");
+    if (response.ok) {
+      const data = await response.json();
+      authState.user = data.user;
+      authState.isAuthenticated = true;
+      // 更新 userId 为登录用户的 ID
+      if (data.user?.userId) {
+        state.userId = data.user.userId;
+      }
+      updateAuthUI();
+    }
+  } catch {
+    // 未登录，使用 demo 用户
+    authState.isAuthenticated = false;
+    updateAuthUI();
+  }
+}
+
+// 更新认证 UI
+function updateAuthUI() {
+  if (authState.isAuthenticated && authState.user) {
+    loginButton?.classList.add("hidden");
+    userProfile?.classList.remove("hidden");
+    if (userAvatar) {
+      userAvatar.src = authState.user.avatar || "/default-avatar.png";
+      userAvatar.alt = authState.user.displayName || authState.user.username;
+    }
+    if (userName) {
+      userName.textContent = authState.user.displayName || authState.user.username;
+    }
+  } else {
+    loginButton?.classList.remove("hidden");
+    userProfile?.classList.add("hidden");
+  }
+}
+
+// ==================== 应用主逻辑 ====================
+
 const AGENT_LABELS = {
   joy: "喜",
   sadness: "哀",
@@ -211,7 +324,8 @@ chatForm.addEventListener("submit", async (event) => {
   const runId = state.sequenceRunId;
 
   try {
-    const response = await fetch("/api/chat", {
+    // 使用流式 API
+    const response = await fetch("/api/chat/stream", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -227,19 +341,70 @@ chatForm.addEventListener("submit", async (event) => {
       throw new Error(`请求失败：${response.status}`);
     }
 
-    const payload = await response.json();
-    state.latestPayload = payload;
-    await playConsoleSequence(payload, runId);
+    // 初始化流式状态
+    const streamState = {
+      agents: [],
+      messageBuffer: "",
+      dominantAgent: null,
+      consensusSummary: "",
+      memories: { relevantMemories: [], newMemories: [] },
+      growth: null,
+      complete: false
+    };
 
-    if (runId !== state.sequenceRunId) {
-      return;
+    // 处理 SSE 流
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      if (runId !== state.sequenceRunId) {
+        reader.cancel();
+        return;
+      }
+
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n\n");
+      buffer = lines.pop() || "";
+
+      for (const line of lines) {
+        if (!line.trim()) continue;
+
+        const [eventLine, ...dataLines] = line.split("\n");
+        const eventType = eventLine.replace("event: ", "").trim();
+        const dataJson = dataLines.join("\n").replace("data: ", "").trim();
+
+        try {
+          const data = JSON.parse(dataJson);
+          handleStreamEvent(eventType, data, streamState, runId);
+        } catch (e) {
+          console.error("Failed to parse SSE data:", e);
+        }
+      }
     }
 
-    appendMessage("知机", payload.message.reply, "baby");
-    renderGrowth(payload);
-    renderMemory(payload.memory);
-    resetAttachments();
-    chatStatus.textContent = "知机已经完成这一轮内部讨论。";
+    // 流结束后的最终处理
+    if (runId === state.sequenceRunId && streamState.complete) {
+      state.latestPayload = {
+        message: { reply: streamState.messageBuffer },
+        agents: streamState.agents,
+        console: {
+          dominantAgent: streamState.dominantAgent,
+          consensusSummary: streamState.consensusSummary,
+          tasks: [],
+          sequence: []
+        },
+        memory: streamState.memories,
+        growth: streamState.growth,
+        meta: { providerStatus: "live", degraded: false }
+      };
+      resetAttachments();
+      chatStatus.textContent = "知机已经完成这一轮内部讨论。";
+    }
+
   } catch (error) {
     chatStatus.textContent = error instanceof Error ? error.message : "请求失败";
   } finally {
@@ -249,6 +414,136 @@ chatForm.addEventListener("submit", async (event) => {
     }
   }
 });
+
+// 处理流式事件
+function handleStreamEvent(eventType, data, streamState, runId) {
+  switch (eventType) {
+    case "safety":
+      chatStatus.textContent = "安全检查完成，正在进行视觉理解...";
+      break;
+
+    case "visualContext":
+      chatStatus.textContent = data?.has_sensitive_content
+        ? "检测到敏感内容，正在谨慎处理..."
+        : "视觉理解完成，正在检索相关记忆...";
+      break;
+
+    case "memory":
+      streamState.memories.relevantMemories = data.relevant_memories || [];
+      chatStatus.textContent = `检索到 ${data.count} 条相关记忆，情绪小人正在准备...`;
+      break;
+
+    case "agentReady":
+      // 核心需求：逐个添加小人卡片
+      streamState.agents.push(data);
+      renderAgentCards(streamState.agents, streamState.dominantAgent, data.agent);
+      renderCyberTown(streamState.agents, streamState.dominantAgent, {
+        actor: data.agent,
+        mode: "announce",
+        detail: `${data.agent} 已准备就绪`
+      });
+
+      // 触发小人出现的动画
+      triggerAgentAppearAnimation(data.agent);
+      chatStatus.textContent = `${AGENT_LABELS[data.agent] || data.agent} 已准备就绪，等待其他情绪...`;
+      break;
+
+    case "dominantAgent":
+      streamState.dominantAgent = data.agent;
+      streamState.consensusSummary = data.consensus_summary;
+
+      // 更新主导情绪 UI
+      dominantAgentNode.textContent = AGENT_LABELS[data.agent] || data.agent;
+      babyMoodNode.textContent = `本轮更偏${AGENT_LABELS[data.agent] || data.agent}系守护`;
+
+      // 刷新所有小人卡片状态
+      renderAgentCards(streamState.agents, data.agent, null);
+      renderCyberTown(streamState.agents, data.agent, null);
+
+      if (data.consensus_summary) {
+        consensusSummaryNode.textContent = data.consensus_summary;
+      }
+      chatStatus.textContent = `${AGENT_LABELS[data.agent] || data.agent} 取得主导权，正在整理回复...`;
+      break;
+
+    case "messageChunk":
+      // 核心需求：流式显示消息
+      if (data.is_complete) {
+        // 完整消息
+        if (!streamState.messageBuffer && data.chunk) {
+          streamState.messageBuffer = data.chunk;
+          appendMessage("知机", data.chunk, "baby");
+        }
+      } else {
+        // 流式片段，逐步累积
+        streamState.messageBuffer += data.chunk;
+        updateStreamingMessage(data.chunk);
+      }
+      break;
+
+    case "memoryStore":
+      streamState.memories.newMemories = data.new_memories || [];
+      renderMemory(streamState.memories);
+      chatStatus.textContent = `存储了 ${data.count} 条新记忆，正在更新成长状态...`;
+      break;
+
+    case "growth":
+      streamState.growth = data;
+      updateAgentGrowthFromPayload(data);
+      renderGrowth({ growth: data });
+      break;
+
+    case "complete":
+      streamState.complete = true;
+      if (data.warnings && data.warnings.length > 0) {
+        chatStatus.textContent = data.warnings[0];
+      }
+
+      // 更新提供商状态
+      providerBadge.textContent = data.provider_status === "live" ? "实时模型" : "本地降级";
+      providerBadge.className = `tag ${data.provider_status === "live" ? "" : "pill-muted"}`;
+      break;
+
+    case "error":
+      chatStatus.textContent = `错误：${data.message}`;
+      if (data.fallback) {
+        chatStatus.textContent += " (已启用降级模式)";
+      }
+      break;
+  }
+}
+
+// 辅助函数：流式消息更新
+function updateStreamingMessage(chunk) {
+  let lastMessage = chatMessages.lastElementChild;
+
+  if (!lastMessage || !lastMessage.classList.contains("streaming")) {
+    // 创建新的流式消息容器
+    lastMessage = document.createElement("article");
+    lastMessage.className = "message message-baby streaming";
+    lastMessage.innerHTML = `
+      <div class="message-role">知机</div>
+      <div class="message-bubble"></div>
+    `;
+    chatMessages.appendChild(lastMessage);
+  }
+
+  // 追加新的文本片段
+  const bubble = lastMessage.querySelector(".message-bubble");
+  bubble.textContent += chunk;
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// 辅助函数：触发小人出现动画
+function triggerAgentAppearAnimation(agent) {
+  const agentCard = document.querySelector(`[data-agent="${agent}"]`);
+  if (agentCard) {
+    agentCard.classList.add("agent-appear");
+    setTimeout(() => {
+      agentCard.classList.remove("agent-appear");
+    }, 600);
+  }
+}
 
 async function playConsoleSequence(payload, runId) {
   updateAgentGrowthFromPayload(payload.growth);
@@ -749,7 +1044,7 @@ function renderAgentCards(agents, dominantAgent, activeAgent) {
             : `Lv.${state.agentGrowth[agent.agent]?.level ?? 1}`;
       const growth = state.agentGrowth[agent.agent] ?? { level: 1, xp: 0 };
       return `
-        <article class="agent-card ${dominantClass}" style="--agent-color:${AGENT_COLORS[agent.agent]}">
+        <article class="agent-card ${dominantClass}" style="--agent-color:${AGENT_COLORS[agent.agent]}" data-agent="${agent.agent}">
           <div class="agent-head">
             <div class="agent-title">
               <span class="agent-dot"></span>

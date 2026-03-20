@@ -7,6 +7,24 @@
     <link rel="stylesheet" href="/styles.css" />
   </head>
   <body>
+    <!-- 登录弹窗 -->
+    <dialog id="loginModal" class="login-modal">
+      <div class="login-modal-content">
+        <div class="login-modal-header">
+          <h2>登录知机 Pro</h2>
+          <button type="button" class="close-button" id="closeLoginModal">×</button>
+        </div>
+        <div class="login-modal-body">
+          <p>使用 Second Me 账号登录，授权后即可使用知机 Pro 的全部功能。</p>
+          <button id="secondmeLoginButton" class="primary-button login-button">
+            <span class="secondme-icon">SM</span>
+            使用 Second Me 登录
+          </button>
+          <p class="login-note">登录即表示您同意我们的服务条款和隐私政策</p>
+        </div>
+      </div>
+    </dialog>
+  <body>
     <div class="app-shell">
       <aside class="panel baby-panel">
         <div class="baby-card">
@@ -66,10 +84,21 @@
             <p class="eyebrow">主聊天区</p>
             <h2>你正在和知机对话</h2>
           </div>
-          <div class="pill-row">
-            <span class="pill">文字已接入</span>
-            <span class="pill pill-muted">图片入口预留</span>
-            <span class="pill pill-muted">语音入口预留</span>
+          <div class="header-actions">
+            <!-- 用户信息区域 -->
+            <div id="userInfo" class="user-info">
+              <button id="loginButton" class="ghost-button login-trigger">登录</button>
+              <div id="userProfile" class="user-profile hidden">
+                <img id="userAvatar" class="user-avatar" src="" alt="" />
+                <span id="userName" class="user-name"></span>
+                <button id="logoutButton" class="ghost-button logout-button" title="退出登录">退出</button>
+              </div>
+            </div>
+            <div class="pill-row">
+              <span class="pill">文字已接入</span>
+              <span class="pill pill-muted">图片入口预留</span>
+              <span class="pill pill-muted">语音入口预留</span>
+            </div>
           </div>
         </header>
 

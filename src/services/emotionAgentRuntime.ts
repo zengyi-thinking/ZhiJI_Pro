@@ -85,4 +85,75 @@ export class EmotionAgentRuntime {
       })
     );
   }
+
+  async runStream(
+    input: {
+      text: string;
+      visualContext: VisualContext | null;
+      memoryContext: string[];
+    },
+    onAgentReady: (agent: EmotionAgentOutput) => void
+  ): Promise<EmotionAgentOutput[]> {
+    const agents: EmotionAgentOutput[] = [];
+
+    // 使用 Promise.all 并发执行，但每个完成后立即触发回调
+    await Promise.all(
+      emotionAgents.map(async (agent) => {
+        const response = await this.aiGateway.generateText({
+          model: this.emotionModel,
+          temperature: 0.8,
+          messages: [
+            {
+              role: "system",
+              content:
+                `${agentPersonas[agent]} ` +
+                "Respond as a structured internal emotional agent in a multi-agent companion system."
+            },
+            {
+              role: "user",
+              content: JSON.stringify({
+                user_text: input.text,
+                visual_context: input.visualContext,
+                memories: input.memoryContext
+              })
+            }
+          ],
+          responseJsonSchema: {
+            name: `${agent}_agent_output`,
+            schema: {
+              type: "object",
+              additionalProperties: false,
+              properties: {
+                emotion_view: { type: "string" },
+                care_goal: { type: "string" },
+                tone_suggestion: { type: "string" },
+                action_suggestion: { type: "string" },
+                visibility_snippet: { type: "string" },
+                weight: { type: "number" }
+              },
+              required: [
+                "emotion_view",
+                "care_goal",
+                "tone_suggestion",
+                "action_suggestion",
+                "visibility_snippet",
+                "weight"
+              ]
+            }
+          }
+        });
+
+        const agentOutput: EmotionAgentOutput = {
+          agent,
+          ...agentOutputSchema.parse(JSON.parse(response))
+        };
+
+        // 立即触发回调，实现"逐个出现"效果
+        onAgentReady(agentOutput);
+        agents.push(agentOutput);
+      })
+    );
+
+    return agents;
+  }
 }

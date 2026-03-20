@@ -1,0 +1,152 @@
+{
+  "name": "zhiji-pro",
+  "version": "0.1.0",
+  "description": "知机 Pro - 情感 AI 聊天伴侣，具备多模态感知、情绪理解和记忆管理能力",
+  "author": "Zhiji Team",
+  "license": "MIT",
+  "mcpVersion": "1.0",
+  "capabilities": {
+    "tools": true,
+    "resources": false,
+    "prompts": false
+  },
+  "tools": [
+    {
+      "name": "chat",
+      "description": "与情感 AI 进行多模态对话，支持文本、图片和音频输入。系统包含安全评估、图片感知、5个情绪 agent 的结构化观点、机器宝宝总控回复和记忆更新。",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "用户唯一标识"
+          },
+          "sessionId": {
+            "type": "string",
+            "description": "会话唯一标识"
+          },
+          "text": {
+            "type": "string",
+            "description": "用户输入的文本内容"
+          },
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "图片 URL 列表"
+          },
+          "audioTranscript": {
+            "type": "string",
+            "description": "音频转写文本"
+          }
+        },
+        "required": ["userId", "sessionId"]
+      }
+    },
+    {
+      "name": "analyze_image",
+      "description": "分析图片内容，生成视觉上下文摘要，支持图片理解和描述",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "imageUrls": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "需要分析的图片 URL 列表"
+          },
+          "text": {
+            "type": "string",
+            "description": "可选的文本提示，引导分析方向"
+          }
+        },
+        "required": ["imageUrls"]
+      }
+    },
+    {
+      "name": "get_memories",
+      "description": "获取用户的记忆存储内容，包括历史对话和情感记录",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "userId": {
+            "type": "string",
+            "description": "用户唯一标识"
+          }
+        },
+        "required": ["userId"]
+      }
+    },
+    {
+      "name": "generate_emotion_card",
+      "description": "根据文本提示生成情感卡片图片",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "生成卡片的文本提示"
+          }
+        },
+        "required": ["prompt"]
+      }
+    },
+    {
+      "name": "text_to_speech",
+      "description": "将文本转换为语音音频",
+      "inputSchema": {
+        "type": "object",
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "需要转换为语音的文本"
+          },
+          "voice": {
+            "type": "string",
+            "description": "语音类型（默认 alloy）",
+            "default": "alloy"
+          }
+        },
+        "required": ["text"]
+      }
+    }
+  ],
+  "endpoints": {
+    "production": "http://zhiji-pro.zeabur.app",
+    "health": "/health",
+    "chat": "/api/chat",
+    "chatStream": "/api/chat/stream",
+    "imageAnalyze": "/api/perception/image-analyze",
+    "memories": "/api/memories",
+    "emotionCard": "/api/expression/cards",
+    "tts": "/api/audio/speak",
+    "auth": {
+      "login": "/api/auth/login",
+      "callback": "/api/auth/callback",
+      "logout": "/api/auth/logout",
+      "me": "/api/auth/me"
+    }
+  },
+  "auth": {
+    "type": "oauth2",
+    "provider": "secondme",
+    "scopes": ["profile", "email"],
+    "authorizationUrl": "https://second.me/oauth/authorize",
+    "tokenUrl": "https://second.me/oauth/token"
+  },
+  "metadata": {
+    "category": "AI 助手",
+    "tags": ["聊天", "情感", "多模态", "AI", "记忆管理"],
+    "language": "zh-CN",
+    "pricing": {
+      "type": "free",
+      "description": "免费使用"
+    },
+    "rateLimit": {
+      "requestsPerMinute": 60,
+      "requestsPerHour": 1000
+    }
+  }
+}

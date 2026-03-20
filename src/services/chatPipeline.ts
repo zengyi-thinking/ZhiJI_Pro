@@ -157,6 +157,196 @@ export class ChatPipeline {
     };
   }
 
+  async runStream(
+    input: ChatTurnInput,
+    sendEvent: (eventType: string, data: unknown) => void
+  ): Promise<void> {
+    const sourceText = [input.text, input.audioTranscript].filter(Boolean).join("\n").trim();
+    const warnings: string[] = [];
+    let degraded = false;
+
+    // 1. 安全检查
+    const safety = await this.tryOrFallback(
+      () => this.safetyService.assess(sourceText),
+      () => this.fallbackSafetyAssessment(sourceText),
+      warnings,
+      () => {
+        degraded = true;
+      }
+    );
+    sendEvent("safety", safety);
+
+    // 2. 视觉理解
+    const visualContext = await this.tryOrFallback(
+      () => this.perceptionService.analyzeImages(input.imageUrls ?? [], sourceText),
+      () => this.fallbackVisualContext(input.imageUrls ?? [], sourceText),
+      warnings,
+      () => {
+        degraded = true;
+      }
+    );
+    sendEvent("visualContext", {
+      scene_summary: visualContext?.scene_summary,
+      emotional_cues: visualContext?.emotional_cues ?? [],
+      has_sensitive_content: (visualContext?.sensitive_signals?.length ?? 0) > 0
+    });
+
+    // 3. 记忆检索
+    const relevantMemories = await this.tryOrFallback(
+      () => this.memoryService.findRelevantMemories(input.userId, sourceText),
+      async () => [],
+      warnings,
+      () => {
+        degraded = true;
+      }
+    );
+    sendEvent("memory", {
+      relevant_memories: relevantMemories.map((item) => ({
+        id: item.id,
+        text: item.text,
+        category: item.category
+      })),
+      count: relevantMemories.length
+    });
+
+    // 4. 情绪小人分析（逐个发送，核心需求）
+    const emotionAgents = await this.tryOrFallback(
+      () =>
+        this.emotionRuntime.runStream(
+          {
+            text: sourceText,
+            visualContext,
+            memoryContext: relevantMemories.map((item) => item.text)
+          },
+          (agent) => {
+            // 立即发送准备好的小人
+            const agentData = {
+              agent: agent.agent,
+              visibility_snippet: agent.visibility_snippet,
+              weight: agent.weight,
+              emotion_view: agent.emotion_view,
+              care_goal: agent.care_goal,
+              stance: this.buildAgentStance(agent),
+              energy: this.buildAgentEnergy(agent),
+              mood: this.buildAgentMood(agent)
+            };
+            sendEvent("agentReady", agentData);
+          }
+        ),
+      () => this.fallbackEmotionAgents(sourceText),
+      warnings,
+      () => {
+        degraded = true;
+      }
+    );
+
+    // 5. 主导情绪确定
+    const dominantAgent =
+      emotionAgents.slice().sort((left, right) => right.weight - left.weight)[0]?.agent ?? "joy";
+    sendEvent("dominantAgent", {
+      agent: dominantAgent,
+      consensus_summary: "" // 将在 reply 后补充
+    });
+
+    // 6. 主脑回复（流式发送，核心需求）
+    let accumulatedReply = "";
+    const reply = await this.tryOrFallback(
+      () =>
+        this.babyOrchestrator.replyStream(
+          {
+            text: sourceText,
+            visualContext,
+            safety,
+            memories: relevantMemories.map((item) => item.text),
+            emotionAgentOutputs: emotionAgents
+          },
+          (chunk) => {
+            accumulatedReply += chunk;
+            sendEvent("messageChunk", { chunk, is_complete: false });
+          }
+        ),
+      () => this.fallbackReply(sourceText, emotionAgents, safety),
+      warnings,
+      () => {
+        degraded = true;
+      }
+    );
+
+    // 发送完成消息
+    sendEvent("messageChunk", {
+      chunk: reply.reply,
+      is_complete: true
+    });
+
+    // 更新主导情绪的总结
+    sendEvent("dominantAgent", {
+      agent: dominantAgent,
+      consensus_summary: reply.emotionalSummary
+    });
+
+    // 7. 记忆存储
+    const storedMemories = await this.tryOrFallback(
+      () => this.memoryService.extractMemoryCandidates(input.userId, sourceText),
+      async () => [],
+      warnings,
+      () => {
+        degraded = true;
+      }
+    );
+    sendEvent("memoryStore", {
+      new_memories: storedMemories.map((item) => ({
+        id: item.id,
+        text: item.text,
+        category: item.category
+      })),
+      count: storedMemories.length
+    });
+
+    // 8. 成长状态更新
+    const growth = this.updateGrowthState(
+      input.sessionId,
+      relevantMemories.length,
+      storedMemories.length,
+      emotionAgents
+    );
+    sendEvent("growth", growth);
+
+    // 9. 完成事件
+    sendEvent("complete", {
+      voice_text: reply.voiceText,
+      growth_note: reply.growthNote,
+      warnings,
+      provider_status: degraded ? "fallback" : "live",
+      degraded
+    });
+  }
+
+  private buildAgentStance(agent: EmotionAgentOutput) {
+    const stanceMap = {
+      joy: "提亮",
+      sadness: "安抚",
+      anger: "护边界",
+      fear: "提醒",
+      disgust: "过滤"
+    } as const;
+    return stanceMap[agent.agent];
+  }
+
+  private buildAgentEnergy(agent: EmotionAgentOutput) {
+    return Math.max(1, Math.min(5, Math.round(agent.weight * 5)));
+  }
+
+  private buildAgentMood(agent: EmotionAgentOutput): "calm" | "alert" | "supportive" | "heated" | "bright" {
+    const moodMap = {
+      joy: "bright",
+      sadness: "supportive",
+      anger: "heated",
+      fear: "alert",
+      disgust: "calm"
+    } as const;
+    return moodMap[agent.agent];
+  }
+
   private async tryOrFallback<T>(
     run: () => Promise<T>,
     fallback: () => Promise<T> | T,
@@ -481,32 +671,6 @@ export class ChatPipeline {
 
     this.agentGrowthBySession.set(sessionId, current);
     return current;
-  }
-
-  private buildAgentStance(agent: EmotionAgentOutput) {
-    const stanceMap = {
-      joy: "提亮",
-      sadness: "安抚",
-      anger: "护边界",
-      fear: "提醒",
-      disgust: "过滤"
-    } as const;
-    return stanceMap[agent.agent];
-  }
-
-  private buildAgentEnergy(agent: EmotionAgentOutput) {
-    return Math.max(1, Math.min(5, Math.round(agent.weight * 5)));
-  }
-
-  private buildAgentMood(agent: EmotionAgentOutput): "calm" | "alert" | "supportive" | "heated" | "bright" {
-    const moodMap = {
-      joy: "bright",
-      sadness: "supportive",
-      anger: "heated",
-      fear: "alert",
-      disgust: "calm"
-    } as const;
-    return moodMap[agent.agent];
   }
 
   private buildConsoleSequence(

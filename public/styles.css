@@ -1707,3 +1707,244 @@ p {
     opacity: 0.25;
   }
 }
+
+/* 流式动画效果 */
+
+/* 小人出现动画 - 渐进式滑入 */
+@keyframes agentAppear {
+  0% {
+    opacity: 0;
+    transform: translateY(24px) scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.agent-appear {
+  animation: agentAppear 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+/* 小人发言动画 */
+@keyframes agentSpeaking {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 20px 5px var(--agent-color, rgba(222, 122, 65, 0.4));
+  }
+}
+
+.agent-speaking {
+  animation: agentSpeaking 0.9s ease-in-out;
+}
+
+/* 流式消息打字机效果 */
+.streaming .message-bubble {
+  position: relative;
+}
+
+.streaming .message-bubble::after {
+  content: "▋";
+  animation: blink 1s step-end infinite;
+  margin-left: 2px;
+  color: var(--accent);
+}
+
+@keyframes blink {
+  0%, 50% {
+    opacity: 1;
+  }
+  51%, 100% {
+    opacity: 0;
+  }
+}
+
+/* 主导情绪高亮动画 */
+.agent-card.is-dominant {
+  animation: dominantPulse 2s ease-in-out infinite;
+}
+
+@keyframes dominantPulse {
+  0%, 100% {
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+  }
+  50% {
+    box-shadow: 0 0 16px 2px var(--agent-color);
+  }
+}
+
+/* ==================== 登录认证样式 ==================== */
+
+/* 登录弹窗 */
+.login-modal {
+  border: none;
+  border-radius: 24px;
+  padding: 0;
+  background: transparent;
+  max-width: 480px;
+  width: 90%;
+}
+
+.login-modal::backdrop {
+  background: rgba(47, 36, 24, 0.5);
+  backdrop-filter: blur(8px);
+}
+
+.login-modal-content {
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 24px;
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.login-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24px 28px;
+  border-bottom: 1px solid var(--border);
+}
+
+.login-modal-header h2 {
+  font-size: 20px;
+  color: var(--text);
+}
+
+.close-button {
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  font-size: 24px;
+  color: var(--muted);
+  cursor: pointer;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-button:hover {
+  background: rgba(106, 73, 32, 0.08);
+  color: var(--text);
+}
+
+.login-modal-body {
+  padding: 32px 28px;
+  text-align: center;
+}
+
+.login-modal-body > p {
+  color: var(--muted);
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+
+.login-button {
+  width: 100%;
+  padding: 16px 24px;
+  font-size: 16px;
+  font-weight: 600;
+  border-radius: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.secondme-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+}
+
+.login-note {
+  font-size: 12px;
+  color: var(--muted);
+  margin: 0;
+}
+
+/* 用户信息区域 */
+.header-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.user-info {
+  display: flex;
+  align-items: center;
+}
+
+.login-trigger {
+  padding: 10px 20px;
+  font-size: 14px;
+  border-radius: 12px;
+}
+
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
+  background: var(--panel-strong);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+}
+
+.user-avatar {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+.user-name {
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--text);
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.logout-button {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+  color: var(--muted);
+}
+
+.logout-button:hover {
+  color: var(--text);
+  background: rgba(106, 73, 32, 0.08);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* 响应式调整 */
+@media (max-width: 1200px) {
+  .header-actions {
+    gap: 8px;
+  }
+
+  .user-name {
+    max-width: 80px;
+  }
+}

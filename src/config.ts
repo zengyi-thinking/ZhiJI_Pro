@@ -15,7 +15,13 @@ const envSchema = z.object({
   MODEL_AUDIO_TTS: z.string().default("gpt-4o-mini-tts"),
   MODEL_EMBEDDING: z.string().default("text-embedding-3-small"),
   MODEL_MODERATION: z.string().default("text-moderation-latest"),
-  MODEL_IMAGE_GENERATION: z.string().default("gpt-image-1-mini")
+  MODEL_IMAGE_GENERATION: z.string().default("gpt-image-1-mini"),
+  // Second Me OAuth 配置
+  SECONDME_CLIENT_ID: z.string().default(""),
+  SECONDME_CLIENT_SECRET: z.string().default(""),
+  SECONDME_REDIRECT_URI: z.string().default("http://zhiji-pro.zeabur.app/api/auth/callback"),
+  SECONDME_BASE_URL: z.string().default("https://second.me"),
+  SESSION_SECRET: z.string().default("zhiji-pro-session-secret")
 });
 
 export const config = envSchema.parse(process.env);
