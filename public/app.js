@@ -26,7 +26,7 @@ checkAuthStatus();
 
 // 打开登录弹窗
 loginButton?.addEventListener("click", () => {
-  loginModal.showModal();
+  openLoginModal();
 });
 
 // 关闭登录弹窗
@@ -40,6 +40,20 @@ loginModal?.addEventListener("click", (event) => {
     loginModal.close();
   }
 });
+
+function openLoginModal() {
+  loginModal?.showModal();
+}
+
+function requireLoginForInteraction(reason = "登录后才能开始和知机对话。") {
+  if (authState.isAuthenticated) {
+    return false;
+  }
+
+  chatStatus.textContent = reason;
+  openLoginModal();
+  return true;
+}
 
 // Second Me 登录按钮点击
 secondmeLoginButton?.addEventListener("click", async () => {
@@ -83,12 +97,16 @@ async function checkAuthStatus() {
         state.userId = data.user.userId;
       }
       updateAuthUI();
+      return;
     }
   } catch {
-    // 未登录，使用 demo 用户
-    authState.isAuthenticated = false;
-    updateAuthUI();
+    // Ignore fetch failures and fall through to guest state.
   }
+
+  authState.user = null;
+  authState.isAuthenticated = false;
+  state.userId = "demo-user";
+  updateAuthUI();
 }
 
 // 更新认证 UI
@@ -314,6 +332,7 @@ chatForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   const text = chatInput.value.trim();
   if (!text && !state.audioTranscript && state.imageUrls.length === 0) return;
+  if (requireLoginForInteraction("请先登录 SecondMe，再让操作室里的小人开始讨论。")) return;
 
   appendMessage("你", text || state.audioTranscript || "发送了一张图片", "user");
   chatInput.value = "";
@@ -1091,11 +1110,43 @@ function resetAttachments() {
 }
 
 async function fileToDataUrl(file) {
-  return new Promise((resolve, reject) => {
+  const rawDataUrl = await new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result));
     reader.onerror = () => reject(reader.error ?? new Error("读取图片失败"));
     reader.readAsDataURL(file);
+  });
+
+  if (!file.type.startsWith("image/")) {
+    return rawDataUrl;
+  }
+
+  return compressImageDataUrl(rawDataUrl);
+}
+
+async function compressImageDataUrl(dataUrl) {
+  return new Promise((resolve) => {
+    const image = new Image();
+    image.onload = () => {
+      const maxDimension = 1440;
+      const scale = Math.min(1, maxDimension / Math.max(image.width, image.height));
+      const targetWidth = Math.max(1, Math.round(image.width * scale));
+      const targetHeight = Math.max(1, Math.round(image.height * scale));
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      const context = canvas.getContext("2d");
+
+      if (!context) {
+        resolve(dataUrl);
+        return;
+      }
+
+      context.drawImage(image, 0, 0, targetWidth, targetHeight);
+      resolve(canvas.toDataURL("image/jpeg", 0.82));
+    };
+    image.onerror = () => resolve(dataUrl);
+    image.src = dataUrl;
   });
 }
 

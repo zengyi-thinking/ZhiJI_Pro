@@ -39,7 +39,7 @@ const chatRequestSchema = z
   });
 
 const imageAnalyzeSchema = z.object({
-  imageUrls: z.array(z.string().url()).min(1),
+  imageUrls: z.array(z.string().min(1)).min(1),
   text: z.string().optional()
 });
 
@@ -149,7 +149,7 @@ export function createApp() {
     origin: true,
     credentials: true
   }));
-  app.use(express.json({ limit: "5mb" }));
+  app.use(express.json({ limit: "20mb" }));
   app.use(cookieParser());
   app.use(express.static(path.join(rootDir, "public")));
 
@@ -276,12 +276,22 @@ export function createApp() {
       return;
     }
 
-    const result = await aiGateway.transcribeAudio(
-      config.MODEL_AUDIO_TRANSCRIBE,
-      req.file.originalname,
-      req.file.buffer,
-      req.file.mimetype
-    );
+    let result;
+    try {
+      result = await aiGateway.transcribeAudio(
+        config.MODEL_AUDIO_TRANSCRIBE,
+        req.file.originalname,
+        req.file.buffer,
+        req.file.mimetype
+      );
+    } catch {
+      result = await aiGateway.transcribeAudio(
+        "whisper-1",
+        req.file.originalname,
+        req.file.buffer,
+        req.file.mimetype
+      );
+    }
 
     res.json({
       transcript: result.text
