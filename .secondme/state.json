@@ -14,7 +14,7 @@
     "oauthUrl": "https://go.second.me/oauth/",
     "tokenEndpoint": "https://api.mindverse.com/gate/lab/api/oauth/token/code",
     "refreshEndpoint": "https://api.mindverse.com/gate/lab/api/oauth/token/refresh",
-    "userInfoEndpoint": "https://api.mindverse.com/gate/lab/api/user/info"
+    "userInfoEndpoint": "https://api.mindverse.com/gate/lab/api/secondme/user/info"
   },
   "prd": {
     "summary": "“知”代表知识与社区基因，“机”代表由多个 agents 自动构成的灵魂机器，支持多 agent 陪伴、多模态感知、记忆成长与像素操作室可视化。",

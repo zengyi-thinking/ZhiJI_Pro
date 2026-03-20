@@ -24,7 +24,7 @@ const envSchema = z.object({
   SECONDME_OAUTH_URL: z.string().url().default("https://go.second.me/oauth/"),
   SECONDME_TOKEN_ENDPOINT: z.string().url().default("https://api.mindverse.com/gate/lab/api/oauth/token/code"),
   SECONDME_REFRESH_ENDPOINT: z.string().url().default("https://api.mindverse.com/gate/lab/api/oauth/token/refresh"),
-  SECONDME_USERINFO_ENDPOINT: z.string().url().default("https://api.mindverse.com/gate/lab/api/user/info"),
+  SECONDME_USERINFO_ENDPOINT: z.string().url().default("https://api.mindverse.com/gate/lab/api/secondme/user/info"),
   SECONDME_BASE_URL: z.string().default("https://second.me"),
   SESSION_SECRET: z.string().default("zhiji-pro-session-secret")
 });

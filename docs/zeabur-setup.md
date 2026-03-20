@@ -27,7 +27,7 @@ SECONDME_API_BASE_URL=https://api.mindverse.com/gate/lab
 SECONDME_OAUTH_URL=https://go.second.me/oauth/
 SECONDME_TOKEN_ENDPOINT=https://api.mindverse.com/gate/lab/api/oauth/token/code
 SECONDME_REFRESH_ENDPOINT=https://api.mindverse.com/gate/lab/api/oauth/token/refresh
-SECONDME_USERINFO_ENDPOINT=https://api.mindverse.com/gate/lab/api/user/info
+SECONDME_USERINFO_ENDPOINT=https://api.mindverse.com/gate/lab/api/secondme/user/info
 SESSION_SECRET=replace-with-a-random-secret
 ```
 
@@ -66,7 +66,7 @@ zeabur variables set SECONDME_API_BASE_URL "https://api.mindverse.com/gate/lab"
 zeabur variables set SECONDME_OAUTH_URL "https://go.second.me/oauth/"
 zeabur variables set SECONDME_TOKEN_ENDPOINT "https://api.mindverse.com/gate/lab/api/oauth/token/code"
 zeabur variables set SECONDME_REFRESH_ENDPOINT "https://api.mindverse.com/gate/lab/api/oauth/token/refresh"
-zeabur variables set SECONDME_USERINFO_ENDPOINT "https://api.mindverse.com/gate/lab/api/user/info"
+zeabur variables set SECONDME_USERINFO_ENDPOINT "https://api.mindverse.com/gate/lab/api/secondme/user/info"
 zeabur variables set SESSION_SECRET "replace-with-a-random-secret"
 
 # AI 配置（替换你的 API Key）
