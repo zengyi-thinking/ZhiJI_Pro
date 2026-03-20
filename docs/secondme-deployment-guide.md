@@ -2,7 +2,7 @@
 
 ## 概述
 
-知机 Pro 已接入 SecondMe OAuth 登录骨架。当前目标是先跑通外部应用授权，再补标准 MCP endpoint。
+知机 已接入 SecondMe OAuth 登录骨架。当前目标是先跑通外部应用授权，再补标准 MCP endpoint。
 
 ## 已完成的功能
 
@@ -38,8 +38,8 @@
 1. 访问 https://develop.second.me/skill
 2. 创建新应用，填写基本信息：
    ```
-   名称: 知机 Pro
-   描述: 情感 AI 聊天伴侣
+   名称: 知机
+   描述: “知” 代表知识与知乎的社区基因，“机” 代表由 agents 自动构成的灵魂机器。
    分类: AI 助手
    ```
 3. 获取 OAuth 凭证：
@@ -47,6 +47,7 @@
    - `Client Secret`
 4. 设置回调 URL：
    ```
+   http://localhost:8080/api/auth/callback
    https://zhiji-pro.zeabur.app/api/auth/callback
    ```
 

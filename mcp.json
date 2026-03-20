@@ -1,7 +1,7 @@
 {
-  "name": "zhiji-pro",
+  "name": "zhiji",
   "version": "0.1.0",
-  "description": "知机 Pro - 情感 AI 聊天伴侣，具备多模态感知、情绪理解和记忆管理能力",
+  "description": "“知”代表知识与社区基因，“机”代表由多个 agents 自动构成的灵魂机器。连起来谐音“知己”，寓意它会在内部充分讨论后，越来越懂你真实意图。",
   "author": "Zhiji Team",
   "license": "MIT",
   "mcpVersion": "1.0",

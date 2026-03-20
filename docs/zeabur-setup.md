@@ -167,7 +167,7 @@ SECONDME_REDIRECT_URI=https://zhiji.yourdomain.com/api/auth/callback
 
 | 配置项 | 值 |
 |--------|-----|
-| 应用名称 | 知机 Pro |
+| 应用名称 | 知机 |
 | 回调 URL | https://zhiji-pro.zeabur.app/api/auth/callback |
 | 授权范围 | user.info |
 

@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "appName": "zhiji-pro",
+  "appName": "zhiji",
   "modules": ["auth", "chat", "profile"],
   "config": {
     "redirectUris": [
-      "http://localhost:3000/api/auth/callback",
+      "http://localhost:8080/api/auth/callback",
       "https://zhiji-pro.zeabur.app/api/auth/callback"
     ],
     "allowedScopes": ["user.info"]
@@ -17,7 +17,7 @@
     "userInfoEndpoint": "https://api.mindverse.com/gate/lab/api/user/info"
   },
   "prd": {
-    "summary": "多 agent 情感陪伴助手，支持聊天、多模态感知、记忆成长与像素操作室可视化。",
+    "summary": "“知”代表知识与社区基因，“机”代表由多个 agents 自动构成的灵魂机器，支持多 agent 陪伴、多模态感知、记忆成长与像素操作室可视化。",
     "features": [
       "SecondMe OAuth 登录",
       "多 agent 情绪协商聊天",

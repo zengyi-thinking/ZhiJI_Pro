@@ -19,10 +19,10 @@
 建议先创建一个外部应用，字段按下面填：
 
 ```text
-App Name: 知机 Pro
-App Description: 一个多 agent 情感陪伴助手，提供聊天、图像理解、语音播报和记忆管理能力。
+App Name: 知机
+App Description: “知” 代表知识与知乎的社区基因，“机” 代表计算机与硬件（由 agents 自动构成）。连起来谐音“知己”，寓意这是一台通过不断讨论、最懂你真实意图的灵魂机器。
 Redirect URIs:
-- http://localhost:3000/api/auth/callback
+- http://localhost:8080/api/auth/callback
 - https://zhiji-pro.zeabur.app/api/auth/callback
 Allowed Scopes:
 - user.info
@@ -37,7 +37,7 @@ Allowed Scopes:
 ```env
 SECONDME_CLIENT_ID=...
 SECONDME_CLIENT_SECRET=...
-SECONDME_REDIRECT_URI=https://zhiji-pro.zeabur.app/api/auth/callback
+SECONDME_REDIRECT_URI=http://localhost:8080/api/auth/callback
 SECONDME_API_BASE_URL=https://api.mindverse.com/gate/lab
 SECONDME_OAUTH_URL=https://go.second.me/oauth/
 SECONDME_TOKEN_ENDPOINT=https://api.mindverse.com/gate/lab/api/oauth/token/code
@@ -109,7 +109,7 @@ https://zhiji-pro.zeabur.app/api/auth/login
 
 平台提交时建议准备：
 
-- 应用名称：`知机 Pro`
+- 应用名称：`知机`
 - 一句话介绍：`会在操作室里由多个情绪 agent 讨论后再回应你的机器宝宝`
 - 详细介绍：突出 `多 agent 情绪协商`、`图片理解`、`语音播报`、`记忆成长`
 - 官网或项目链接：你的 GitHub 仓库或 Zeabur 部署地址

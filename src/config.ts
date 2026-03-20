@@ -4,7 +4,7 @@ import { z } from "zod";
 dotenv.config();
 
 const envSchema = z.object({
-  PORT: z.coerce.number().default(3000),
+  PORT: z.coerce.number().default(8080),
   CREATION_AI_BASE_URL: z.string().url(),
   CREATION_AI_API_KEY: z.string().min(1),
   MEMORY_STORAGE_PATH: z.string().min(1).default("data/memories.json"),
@@ -19,7 +19,7 @@ const envSchema = z.object({
   // Second Me OAuth 配置
   SECONDME_CLIENT_ID: z.string().default(""),
   SECONDME_CLIENT_SECRET: z.string().default(""),
-  SECONDME_REDIRECT_URI: z.string().default("https://zhiji-pro.zeabur.app/api/auth/callback"),
+  SECONDME_REDIRECT_URI: z.string().default("http://localhost:8080/api/auth/callback"),
   SECONDME_API_BASE_URL: z.string().url().default("https://api.mindverse.com/gate/lab"),
   SECONDME_OAUTH_URL: z.string().url().default("https://go.second.me/oauth/"),
   SECONDME_TOKEN_ENDPOINT: z.string().url().default("https://api.mindverse.com/gate/lab/api/oauth/token/code"),
