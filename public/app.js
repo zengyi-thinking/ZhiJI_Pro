@@ -58,7 +58,8 @@ function requireLoginForInteraction(reason = "登录后才能开始和知机对�
 // Second Me 登录按钮点击
 secondmeLoginButton?.addEventListener("click", async () => {
   try {
-    const response = await fetch("/api/auth/login");
+    const redirectUri = `${window.location.origin}/api/auth/callback`;
+    const response = await fetch(`/api/auth/login?redirect_uri=${encodeURIComponent(redirectUri)}`);
     if (!response.ok) throw new Error("获取登录链接失败");
 
     const data = await response.json();
